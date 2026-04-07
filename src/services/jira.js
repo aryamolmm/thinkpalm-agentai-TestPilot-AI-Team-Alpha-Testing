@@ -13,9 +13,13 @@ const parseADF = (node) => {
 };
 
 export const fetchUserStory = async (baseUrl, email, token, storyId) => {
+  // Use current origin if in production, otherwise default to local proxy
+  const PROXY_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
+    ? 'http://127.0.0.1:3001' 
+    : window.location.origin;
+
   try {
-    // Calling our local proxy instead of Jira directly to avoid CORS issues
-    const response = await axios.post('http://localhost:3001/api/jira/fetch', {
+    const response = await axios.post(`${PROXY_URL}/api/jira/fetch`, {
       baseUrl,
       email,
       token,

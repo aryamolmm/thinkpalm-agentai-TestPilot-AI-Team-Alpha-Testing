@@ -16,9 +16,12 @@ const PlaywrightPage = ({ story, onBack }) => {
     setIsRunning(true)
     setTestOutput('🚀 Initializing Environment...\nRunning Playwright dynamic test suite...\n\n')
     
+    const PROXY_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
+      ? 'http://127.0.0.1:3001' 
+      : window.location.origin;
+
     try {
-      // Using 127.0.0.1 to ensure reliable connection
-      const response = await axios.post('http://127.0.0.1:3001/api/test/run', {
+      const response = await axios.post(`${PROXY_URL}/api/test/run`, {
         script: script,
         id: story.id
       })

@@ -67,3 +67,12 @@ app.post('/api/test/run', async (req, res) => {
 app.listen(PORT, () => {
   console.log(`🚀 Jira CORS Proxy & Test Runner at http://localhost:${PORT}`);
 });
+
+// For production deployment: serve frontend static files
+const __dirname = join(process.cwd(), 'dist');
+app.use(express.static(__dirname));
+
+// Fallback for React Router (Single Page App)
+app.get('*', (req, res) => {
+  res.sendFile(join(__dirname, 'index.html'));
+});
