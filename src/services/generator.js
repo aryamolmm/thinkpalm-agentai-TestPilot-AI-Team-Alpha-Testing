@@ -1,152 +1,100 @@
+import axios from 'axios';
+
+const getProxyUrl = () => window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
+  ? 'http://127.0.0.1:3001' 
+  : window.location.origin;
+
 /**
- * Test Case Generator Utility
- * This generates standard test cases based on the story type and summary.
+ * Agent 1: Test Case Creation (AI Driven)
  */
-export const generateTestCases = (story) => {
-  const { id, summary, assignee, reporter } = story;
-  const now = new Date().toLocaleDateString();
+export const generateTestCasesAI = async (story, apiKey, engine = 'gemini') => {
+  const PROXY_URL = getProxyUrl();
+  try {
+    const response = await axios.post(`${PROXY_URL}/api/ai/generate`, {
+      story,
+      apiKey,
+      type: 'testcases',
+      engine
+    });
+    return response.data.testCases;
+  } catch (error) {
+    console.error('Agent 1 Error:', error);
+    const backendError = error.response?.data?.error;
+    throw new Error(backendError || 'Agent 1 failed to analyze the story.');
+  }
+};
 
-  // Basic Template for different scenarios
-  const scenarios = [
-    {
-      type: 'Happy Path',
-      summary: `Successful ${summary}`,
-      steps: `1. Open application.\n2. Navigate to feature: ${summary}.\n3. Perform expected actions.\n4. Verify success.`,
-      result: 'Action completed successfully without errors.'
-    },
-    {
-      type: 'Negative',
-      summary: `Invalid input for ${summary}`,
-      steps: `1. Navigate to: ${summary}.\n2. Enter invalid or empty metadata.\n3. Attempt to submit.`,
-      result: 'Error message is displayed; submission is blocked.'
-    },
-    {
-      type: 'Edge Case',
-      summary: `Maximum input length for ${summary}`,
-      steps: `1. Identify maximum allowed field lengths.\n2. Enter boundary-limit values.\n3. Submit.`,
-      result: 'System handles large values without crashing or truncating unexpectedly.'
-    },
-    {
-      type: 'Boundary Values',
-      summary: `Numeric/Date boundaries for ${summary}`,
-      steps: `1. Enter minimum possible value.\n2. Enter maximum possible value.\n3. Enter value just outside boundaries.`,
-      result: 'System accepts min/max and rejects out-of-bounds values.'
-    },
-    {
-      type: 'Error handling',
-      summary: `Interrupted ${summary} flow`,
-      steps: `1. Start ${summary} process.\n2. Interrupt by navigating away or killing process.\n3. Re-open and verify state.`,
-      result: 'System maintains data integrity; no duplicate records created.'
-    },
-    {
-      type: 'Real-user mistake',
-      summary: `Rapid double-clicking on ${summary} submit`,
-      steps: `1. Click the submit button for ${summary} twice rapidly.`,
-      result: 'Only one transaction is processed; UI provides feedback to prevent multi-clicks.'
-    },
-    {
-      type: 'Real-user mistake',
-      summary: `Network delay/offline during ${summary}`,
-      steps: `1. Start ${summary} process.\n2. Simulate network delay or disconnect.\n3. Wait for timeout.`,
-      result: 'User is notified of connection issue; allows retry without losing progress if possible.'
-    },
-    {
-      type: 'Real-user mistake',
-      summary: `Browser back button during ${summary}`,
-      steps: `1. Initiate ${summary} flow.\n2. On confirmation step, click browser "Back".`,
-      result: 'System displays warning or redirects safely without causing session errors.'
-    }
-  ];
+/**
+ * Agent 2: Playwright Script Generation (AI Driven)
+ */
+export const generatePlaywrightScriptAI = async (story, apiKey, engine = 'gemini') => {
+  const PROXY_URL = getProxyUrl();
+  try {
+    const response = await axios.post(`${PROXY_URL}/api/ai/generate`, {
+      story,
+      apiKey,
+      type: 'script',
+      engine
+    });
+    return response.data.script;
+  } catch (error) {
+    console.error('Agent 2 Error:', error);
+    throw new Error('Agent 2 failed to generate the automation script.');
+  }
+};
 
-  // Map to the requested CSV format
-  // Columns: Work Key,Summary,Assignee,Reporter,Step Summary,Expected Result,Version,Folder,TestCase Type,Created By,Created On,Updated By,Updated On,Story Linkages,Is Shareable Step
-  const testCases = scenarios.map((scen, index) => ({
-    'Work Key': `${id}-TC-${index + 1}`,
-    'Summary': scen.summary,
-    'Assignee': assignee || 'Unassigned',
-    'Reporter': reporter || 'System',
-    'Step Summary': scen.steps,
-    'Expected Result': scen.result,
-    'Version': '1.0',
-    'Folder': '/Testcases',
-    'TestCase Type': scen.type,
-    'Created By': 'Antigravity AI',
-    'Created On': now,
-    'Updated By': 'Antigravity AI',
-    'Updated On': now,
-    'Story Linkages': id,
-    'Is Shareable Step': 'No'
-  }));
-
-  return testCases;
+/**
+ * Agent 3: Rework Failed Script
+ */
+export const reworkScriptAI = async (story, script, errorLog, apiKey, engine = 'gemini') => {
+  const PROXY_URL = getProxyUrl();
+  try {
+    const response = await axios.post(`${PROXY_URL}/api/ai/rework`, {
+      story,
+      script,
+      errorLog,
+      apiKey,
+      engine
+    });
+    return response.data.script;
+  } catch (error) {
+    console.error('Agent 3 Error:', error);
+    throw new Error('Agent 3 failed to rework the script.');
+  }
 };
 
 export const convertToCSV = (testCases) => {
+  if (!testCases || testCases.length === 0) return '';
   const headers = Object.keys(testCases[0]);
   const rows = testCases.map(tc => 
-    headers.map(header => `"${(tc[header] || '').replace(/"/g, '""')}"`).join(',')
+    headers.map(header => `"${(tc[header] || '').toString().replace(/"/g, '""')}"`).join(',')
   );
   return [headers.join(','), ...rows].join('\n');
 };
 
-export const generatePlaywrightScript = (story) => {
-  const { id, summary } = story;
-  const safeName = summary.replace(/[^a-zA-Z0-9]/g, '');
-
-  return `import { test, expect } from '@playwright/test';
-
-/**
- * Story: ${id} - ${summary}
- * Generated by Antigravity AI
- */
-
-test.describe('${id}: ${summary}', () => {
+export const convertToExcel = (testCases) => {
+  if (!testCases || testCases.length === 0) return '';
+  const headers = Object.keys(testCases[0]);
   
-  test.beforeEach(async ({ page }) => {
-    // TODO: Define your base navigation for this story
-    await page.goto('/');
+  let html = '<table><thead><tr>';
+  headers.forEach(h => html += `<th style="background-color: #4f46e5; color: white;">${h}</th>`);
+  html += '</tr></thead><tbody>';
+  
+  testCases.forEach(tc => {
+    html += '<tr>';
+    headers.forEach(h => html += `<td>${tc[h] || ''}</td>`);
+    html += '</tr>';
   });
+  
+  html += '</tbody></table>';
+  return html;
+};
 
-  // --- Happy Path Scenarios ---
-  test('should complete the primary flow for ${summary}', async ({ page }) => {
-    // Step 1: Open Application
-    // Step 2: Perform expected actions for ${summary}
-    // TODO: Add your specific element selectors here
-    // Example: await page.getByRole('button', { name: 'Submit' }).click();
-    
-    // Final Assertion
-    // expect(page.url()).toContain('/success');
-  });
-
-  // --- Negative Scenarios ---
-  test('should show error handling for invalid ${summary} input', async ({ page }) => {
-    // Step 1: Navigate to feature
-    // Step 2: Enter invalid data
-    // Step 3: Attempt submission
-    
-    // Example: await page.getByRole('button', { name: 'Submit' }).click();
-    // await expect(page.locator('.error-message')).toBeVisible();
-  });
-
-  // --- Edge Case / Real-user Mistakes ---
-  test('should handle rapid double clicks on ${summary} buttons', async ({ page }) => {
-    const submitBtn = page.getByRole('button', { name: /submit|pay|confirm/i });
-    // Simulate rapid clicks
-    await submitBtn.click({ clickCount: 2, delay: 0 });
-    
-    // Verify only one action processed
-    // await expect(page.locator('.success-feedback')).toHaveCount(1);
-  });
-
-  test('should handle browser navigation (Back Button) during ${summary}', async ({ page }) => {
-    // 1. Move to a later stage of the flow
-    // 2. Go back
-    await page.goBack();
-    
-    // Verify system state integrity
-    // await expect(page.locator('.warning-dialog')).toBeVisible();
-  });
-
-});
-`;
+export const downloadFile = (content, fileName, type) => {
+  const blob = new Blob([content], { type });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.setAttribute('href', url);
+  link.setAttribute('download', fileName);
+  link.click();
 };

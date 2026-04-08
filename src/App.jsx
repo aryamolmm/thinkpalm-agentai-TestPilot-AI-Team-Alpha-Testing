@@ -32,6 +32,10 @@ function App() {
   const backToDashboard = () => setView('dashboard')
   const backToQA = () => setView('qa')
 
+  const handleUpdateCreds = (newCreds) => {
+    setCredentials(newCreds)
+  }
+
   return (
     <div className="app-container">
       {view === 'login' && (
@@ -41,6 +45,7 @@ function App() {
       {view === 'dashboard' && (
         <Dashboard 
           credentials={credentials} 
+          onUpdateCredentials={handleUpdateCreds}
           onLogout={handleLogout} 
           onGoToGenerator={goToQA} 
         />
@@ -49,6 +54,7 @@ function App() {
       {view === 'qa' && currentStory && (
         <TestCasePage 
           story={currentStory} 
+          credentials={credentials}
           onBack={backToDashboard}
           onGoToAutomation={goToAutomation}
         />
@@ -57,7 +63,9 @@ function App() {
       {view === 'automation' && currentStory && (
         <PlaywrightPage 
           story={currentStory} 
+          credentials={credentials}
           onBack={backToQA}
+          onGoToDashboard={backToDashboard}
         />
       )}
     </div>

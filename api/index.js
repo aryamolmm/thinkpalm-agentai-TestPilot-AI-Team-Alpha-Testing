@@ -38,36 +38,95 @@ app.post('/api/jira/fetch', async (req, res) => {
   }
 });
 
-// Endpoint for AI-driven generation using Gemini 1.5 Pro
+// Endpoint for AI-driven generation
 app.post('/api/ai/generate', async (req, res) => {
-  const { story, apiKey, type } = req.body;
-  if (!apiKey || !story) return res.status(400).json({ error: 'Missing story or AI Key' });
-
-  const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro" });
-
+  const { story, apiKey, type, engine = 'gemini' } = req.body;
+  
   const prompt = type === 'script' 
-    ? `Write a complete Playwright TypeScript automation script for this Jira Story: "${story.summary}". 
-       Description: ${story.description}. 
-       The script should include Happy Path, Negative scenarios, and Edge cases. 
-       Return ONLY the TypeScript code block, no markdown or text.`
-    : `Generate 8 diverse test cases for this Jira Story: "${story.summary}". 
-       Description: ${story.description}. 
-       Include: Happy Path, Negative, Edge case, Boundary, Error handling, and Real-user mistakes.
-       Use exactly these CSV columns: Work Key,Summary,Assignee,Reporter,Step Summary,Expected Result,Version,Folder,TestCase Type,Created By,Created On,Updated By,Updated On,Story Linkages,Is Shareable Step.
-       Return a JSON array of objects representing these test cases. NO text or markdown.`;
+    ? `[AGENT 2: AUTOMATION SPECIALIST]
+       Write a complete Playwright TypeScript automation script for Jira Story: "${story.summary}".
+       Description: ${story.description || 'No description'}.
+       The script MUST be production-ready and include Happy Path, Negative, and Edge cases.
+       Return ONLY the TypeScript code block.`
+    : `[AGENT 1: SRS ANALYST]
+       Analyze this Jira Story: "${story.summary}".
+       Description: ${story.description || 'No description'}.
+       Generate 8 diverse test cases (Happy Path, Negative, Edge, Boundary, Error handling, Real-user mistake).
+       Format: JSON array of objects.
+       Columns: Work Key,Summary,Assignee,Reporter,Step Summary,Expected Result,Version,Folder,TestCase Type,Created By,Created On,Updated By,Updated On,Story Linkages,Is Shareable Step.`;
 
   try {
-    const result = await model.generateContent(prompt);
-    const text = result.response.text().replace(/```json|```typescript|```|json/g, '').trim();
-    
+    let text = '';
+    if (engine === 'groq') {
+      const response = await axios.post('https://api.groq.com/openai/v1/chat/completions', {
+        model: "llama-3.3-70b-versatile",
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.1
+      }, {
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      text = response.data.choices[0].message.content;
+    } else {
+      if (!apiKey) throw new Error('Gemini API Key is required');
+      const genAI = new GoogleGenerativeAI(apiKey);
+      const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro" });
+      const result = await model.generateContent(prompt);
+      text = result.response.text();
+    }
+
     if (type === 'script') {
+        text = text.replace(/```typescript|```ts|```|typescript/g, '').trim();
         res.json({ script: text });
     } else {
-        res.json({ testCases: JSON.parse(text) });
+        const jsonMatch = text.match(/\[\s*\{[\s\S]*\}\s*\]/);
+        const jsonText = jsonMatch ? jsonMatch[0] : text.replace(/```json|```|json/g, '').trim();
+        res.json({ testCases: JSON.parse(jsonText.trim()) });
     }
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    let errorMessage = error.response?.data?.error?.message || error.message;
+    console.error('AI Error:', errorMessage);
+    res.status(500).json({ error: errorMessage });
+  }
+});
+
+// [AGENT 3: REWORK AGENT]
+app.post('/api/ai/rework', async (req, res) => {
+  const { story, script, errorLog, apiKey, engine = 'gemini' } = req.body;
+  
+  const prompt = `[AGENT 3: DEBUG & REWORK SPECIALIST]
+    The following Playwright script failed.
+    STORY: ${story.summary}
+    SCRIPT: ${script}
+    ERROR LOG: ${errorLog}
+    Return ONLY the corrected TypeScript code block.`;
+
+  try {
+    let text = '';
+    if (engine === 'groq') {
+      const response = await axios.post('https://api.groq.com/openai/v1/chat/completions', {
+        model: "llama-3.3-70b-versatile",
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.1
+      }, {
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      text = response.data.choices[0].message.content;
+    } else {
+      if (!apiKey) throw new Error('Gemini API Key is required');
+      const genAI = new GoogleGenerativeAI(apiKey);
+      const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro" });
+      const result = await model.generateContent(prompt);
+      text = result.response.text();
+    }
+    res.json({ script: text.replace(/```typescript|```ts|```|typescript/g, '').trim() });
+  } catch (error) {
+    res.status(500).json({ error: error.response?.data?.error?.message || error.message });
   }
 });
 
@@ -90,7 +149,8 @@ app.post('/api/test/run', async (req, res) => {
 
 if (process.env.NODE_ENV !== 'production' || !process.env.VERCEL) {
   app.listen(PORT, () => {
-    console.log(`🚀 AI-Enabled Jira Proxy & Test Runner at http://localhost:${PORT}`);
+    console.log(`🚀 Hybrid AI & Jira Proxy Running at http://localhost:${PORT}`);
   });
 }
+
 export default app;

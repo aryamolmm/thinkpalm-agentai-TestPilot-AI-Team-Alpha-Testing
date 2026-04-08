@@ -1,37 +1,52 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { fetchUserStory } from '../services/jira'
 
-const Dashboard = ({ credentials, onLogout, onGoToGenerator }) => {
-  const [story, setStory] = useState(null)
-  const [loading, setLoading] = useState(true)
+const Dashboard = ({ credentials, onUpdateCredentials, onLogout, onGoToGenerator }) => {
+  const [formData, setFormData] = useState({
+    type: 'story',
+    storyId: '',
+    engine: 'gemini',
+    aiKey: credentials.geminiKey || ''
+  })
+  const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
 
-  useEffect(() => {
-    const loadData = async () => {
-      try {
-        setLoading(true)
-        const data = await fetchUserStory(
-          credentials.baseUrl,
-          credentials.email,
-          credentials.token,
-          credentials.storyId
-        )
-        setStory(data)
-      } catch (err) {
-        setError(err.message || 'Failed to fetch the story. Check your ID and API token.')
-      } finally {
-        setLoading(false)
-      }
-    }
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    if (!formData.storyId || !formData.aiKey) return
 
-    loadData()
-  }, [credentials])
+    try {
+      setLoading(true)
+      setError(null)
+      
+      const story = await fetchUserStory(
+        credentials.baseUrl,
+        credentials.email,
+        credentials.token,
+        formData.storyId
+      )
+
+      // Update global credentials with the selected AI info
+      onUpdateCredentials({
+        ...credentials,
+        engine: formData.engine,
+        geminiKey: formData.aiKey
+      })
+
+      // Navigate to the test case generation page
+      onGoToGenerator(story)
+    } catch (err) {
+      setError(err.message || 'Failed to fetch the story. Check your Story ID.')
+    } finally {
+      setLoading(false)
+    }
+  }
 
   return (
     <div className="animate-fade-in">
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '3rem' }}>
         <div>
-          <h1 className="title-gradient" style={{ margin: 0 }}>Story Details</h1>
+          <h1 className="title-gradient" style={{ margin: 0 }}>Configure QA Generation</h1>
           <p style={{ color: '#94a3b8', margin: '0.5rem 0 0' }}>Connected to {credentials.baseUrl}</p>
         </div>
         <button onClick={onLogout} style={{ width: 'auto', padding: '0.5rem 1rem', background: 'rgba(239, 68, 68, 0.2)', color: '#ef4444', border: '1px solid rgba(239, 68, 68, 0.2)' }}>
@@ -39,74 +54,100 @@ const Dashboard = ({ credentials, onLogout, onGoToGenerator }) => {
         </button>
       </header>
 
-      {loading ? (
-        <div style={{ textAlign: 'center', padding: '10vh' }}>
-          <div className="spinner" style={{ border: '4px solid rgba(255,255,255,0.1)', borderTop: '4px solid #6366f1', borderRadius: '50%', width: '40px', height: '40px', animation: 'spin 1s linear infinite', margin: '0 auto 1rem' }}></div>
-          <p>Connecting to Jira...</p>
-        </div>
-      ) : error ? (
-        <div className="glass-card" style={{ background: 'rgba(239, 68, 68, 0.1)', borderColor: 'rgba(239, 68, 68, 0.3)' }}>
-          <h3 style={{ color: '#ef4444' }}>Connection Error</h3>
-          <p>{error}</p>
-          <button onClick={() => window.location.reload()} style={{ marginTop: '1rem', width: 'auto' }}>Retry</button>
-        </div>
-      ) : (
-        <div style={{ maxWidth: '800px', margin: '0 auto' }}>
-          <div className="glass-card">
-            <div className={`status-badge ${story.status.toLowerCase().includes('done') ? 'status-done' : story.status.toLowerCase().includes('progress') ? 'status-inprogress' : 'status-todo'}`}>
-              {story.status}
-            </div>
-            <h2 style={{ fontSize: '2.5rem', margin: '1rem 0', letterSpacing: '-1px' }}>{story.summary}</h2>
-            
-            <div style={{ background: 'rgba(15, 23, 42, 0.3)', padding: '2rem', borderRadius: '16px', margin: '2rem 0' }}>
-              <p style={{ color: '#94a3b8', fontSize: '0.9rem', marginBottom: '1rem', textTransform: 'uppercase', letterSpacing: '1px' }}>Full Description</p>
-              <div style={{ fontSize: '1.1rem', lineHeight: '1.6', color: '#e2e8f0', whiteSpace: 'pre-wrap' }}>
-                {story.description}
-              </div>
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '2rem', marginTop: '3rem', paddingTop: '2rem', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
-              <div>
-                <p style={{ color: '#94a3b8', margin: '0 0 0.5rem', fontSize: '0.8rem' }}>Story Key</p>
-                <p style={{ fontSize: '1.2rem', fontWeight: 600 }}>{story.id}</p>
-              </div>
-              <div>
-                <p style={{ color: '#94a3b8', margin: '0 0 0.5rem', fontSize: '0.8rem' }}>Priority</p>
-                <p style={{ fontSize: '1.2rem', fontWeight: 600 }}>{story.priority}</p>
-              </div>
-              <div>
-                <p style={{ color: '#94a3b8', margin: '0 0 0.5rem', fontSize: '0.8rem' }}>Assignee</p>
-                <p style={{ fontSize: '1.2rem', fontWeight: 600 }}>👤 {story.assignee}</p>
-              </div>
-              <div>
-                <p style={{ color: '#94a3b8', margin: '0 0 0.5rem', fontSize: '0.8rem' }}>Reporter</p>
-                <p style={{ fontSize: '1.2rem', fontWeight: 600 }}>👮 {story.reporter}</p>
-              </div>
-            </div>
-
-            <div style={{ marginTop: '4rem', display: 'flex', gap: '1rem' }}>
-              <button 
-                onClick={() => onGoToGenerator(story)} 
-                style={{ 
-                  flex: 1, 
-                  padding: '1.5rem', 
-                  fontSize: '1.2rem', 
-                  background: 'linear-gradient(135deg, #10b981, #059669)',
-                  boxShadow: '0 10px 20px -5px rgba(16, 185, 129, 0.3)'
-                }}
+      <div className="glass-card" style={{ maxWidth: '600px', margin: '0 auto' }}>
+        <form onSubmit={handleSubmit}>
+          <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem' }}>
+            <div style={{ flex: 1 }}>
+              <label>Type</label>
+              <select 
+                value={formData.type} 
+                onChange={(e) => setFormData({...formData, type: e.target.value})}
+                style={{ width: '100%', padding: '0.9rem', borderRadius: '12px', background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.1)', color: 'white', marginTop: '0.5rem' }}
               >
-                Launch Test Case Generator →
-              </button>
+                <option value="story">Story</option>
+                <option value="bug">Bug</option>
+              </select>
+            </div>
+            
+            <div style={{ flex: 2 }}>
+              <label>Story / Bug ID</label>
+              <input 
+                type="text" 
+                placeholder="e.g. KAN-123" 
+                value={formData.storyId}
+                onChange={(e) => setFormData({...formData, storyId: e.target.value})}
+                required
+                style={{ marginTop: '0.5rem' }}
+              />
             </div>
           </div>
-        </div>
-      )}
 
-      <style>{`
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-      `}</style>
+          <div style={{ background: 'rgba(99, 102, 241, 0.1)', padding: '1.5rem', borderRadius: '16px', border: '1px solid rgba(99, 102, 241, 0.3)', marginBottom: '1.5rem', marginTop: '1.5rem' }}>
+            <label style={{ color: '#818cf8', marginBottom: '1rem', display: 'block' }}>Choose AI Orchestrator</label>
+            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem' }}>
+              <button 
+                type="button"
+                onClick={() => setFormData({...formData, engine: 'gemini'})}
+                style={{ 
+                  background: formData.engine === 'gemini' ? '#6366f1' : 'rgba(255,255,255,0.05)',
+                  fontSize: '0.8rem', padding: '0.5rem', flex: 1
+                }}
+              >
+                Google Gemini (Pro)
+              </button>
+              <button 
+                type="button"
+                onClick={() => setFormData({...formData, engine: 'groq'})}
+                style={{ 
+                  background: formData.engine === 'groq' ? '#6366f1' : 'rgba(255,255,255,0.05)',
+                  fontSize: '0.8rem', padding: '0.5rem', flex: 1
+                }}
+              >
+                Groq (Express)
+              </button>
+            </div>
+
+            <label style={{ fontSize: '0.8rem' }}>
+              {formData.engine === 'gemini' ? 'Gemini API Key' : 'Groq API Key'}
+            </label>
+            <input 
+              type="password" 
+              placeholder={`Enter ${formData.engine === 'gemini' ? 'Gemini' : 'Groq'} API Key`} 
+              value={formData.aiKey}
+              onChange={(e) => setFormData({...formData, aiKey: e.target.value})}
+              style={{ margin: '0.5rem 0 0', border: 'none', background: 'rgba(0,0,0,0.2)' }}
+              required
+            />
+            <p style={{ margin: '0.5rem 0 0', fontSize: '0.7rem', color: '#64748b' }}>
+              {formData.engine === 'gemini' 
+                ? 'Uses Google Cloud for light-speed analysis.' 
+                : 'Uses Groq LPUs for the fastest response times.'}
+            </p>
+          </div>
+
+          {error && (
+            <div style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', padding: '1rem', borderRadius: '12px', color: '#ef4444', marginBottom: '1.5rem' }}>
+              {error}
+            </div>
+          )}
+
+          <button 
+            type="submit" 
+            disabled={loading}
+            style={{ 
+              width: '100%', 
+              padding: '1.2rem', 
+              fontSize: '1.1rem', 
+              background: 'linear-gradient(135deg, #10b981, #059669)'
+            }}
+          >
+            {loading ? 'Fetching Story...' : 'Generate Testcase'}
+          </button>
+        </form>
+      </div>
     </div>
   )
 }
 
 export default Dashboard
+
