@@ -8,11 +8,18 @@ const TestCasePage = ({ story, credentials, onBack, onGoToAutomation }) => {
   const [autoGenerate, setAutoGenerate] = useState(false)
   const [script, setScript] = useState('')
   const [isGeneratingScript, setIsGeneratingScript] = useState(false)
+  const [copiedScript, setCopiedScript] = useState(false)
   const [editingIndex, setEditingIndex] = useState(null)
   const [editFormData, setEditFormData] = useState({})
   
   const scriptRef = useRef(null)
   const hasGeneratedRef = useRef(false)
+
+  const handleCopyScript = () => {
+    navigator.clipboard.writeText(script)
+    setCopiedScript(true)
+    setTimeout(() => setCopiedScript(false), 2000)
+  }
 
   // Run analysis on mount
   useEffect(() => {
@@ -87,6 +94,11 @@ const TestCasePage = ({ story, credentials, onBack, onGoToAutomation }) => {
     setTestCases(updatedCases)
     setEditingIndex(null)
     setEditFormData({})
+  }
+
+  const handleDeleteRow = (index) => {
+    const updatedCases = testCases.filter((_, i) => i !== index)
+    setTestCases(updatedCases)
   }
 
   const downloadFile = (content, fileName, type) => {
@@ -224,8 +236,9 @@ const TestCasePage = ({ story, credentials, onBack, onGoToAutomation }) => {
                             {tc['TestCase Type']}
                           </span>
                         </td>
-                        <td style={{ padding: '0.9rem 1rem' }}>
-                           <button onClick={() => handleEditRow(i, tc)} style={{ padding: '0.3rem 0.6rem', background: 'rgba(255,255,255,0.05)', fontSize: '0.75rem', border: '1px solid rgba(255,255,255,0.1)' }}>✏️ Edit</button>
+                        <td style={{ padding: '0.9rem 1rem', display: 'flex', gap: '0.4rem' }}>
+                           <button onClick={() => handleEditRow(i, tc)} title="Edit" style={{ padding: '0.3rem 0.6rem', background: 'rgba(255,255,255,0.05)', fontSize: '0.85rem', border: '1px solid rgba(255,255,255,0.1)', cursor: 'pointer', borderRadius: '4px' }}>✏️</button>
+                           <button onClick={() => handleDeleteRow(i)} title="Delete" style={{ padding: '0.3rem 0.6rem', background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', fontSize: '0.85rem', border: '1px solid rgba(239, 68, 68, 0.2)', cursor: 'pointer', borderRadius: '4px' }}>🗑️</button>
                         </td>
                       </>
                     )}
@@ -245,9 +258,19 @@ const TestCasePage = ({ story, credentials, onBack, onGoToAutomation }) => {
               <h3 className="title-gradient" style={{ margin: 0 }}>Playwright Script</h3>
               <p style={{ color: '#64748b', fontSize: '0.8rem', margin: '0.25rem 0 0' }}>Auto-generated from your test cases</p>
             </div>
-            <button onClick={handleGenerateScript} className="secondary-btn" disabled={isGeneratingScript}>
-              {isGeneratingScript ? '⏳ Generating...' : '↺ Regenerate'}
-            </button>
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <button 
+                onClick={handleCopyScript} 
+                title="Copy Code"
+                style={{ width: 'auto', padding: '0.4rem 0.8rem', background: 'rgba(255,255,255,0.05)', fontSize: '1.25rem', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '6px' }}
+                disabled={!script}
+              >
+                {copiedScript ? '✅' : '📋'}
+              </button>
+              <button onClick={handleGenerateScript} className="secondary-btn" disabled={isGeneratingScript}>
+                {isGeneratingScript ? '⏳ Generating...' : '↺ Regenerate'}
+              </button>
+            </div>
           </div>
 
           {isGeneratingScript ? (

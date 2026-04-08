@@ -9,6 +9,7 @@ const PlaywrightPage = ({ story, credentials, onBack, onGoToDashboard }) => {
   const [isGenerating, setIsGenerating] = useState(false)
   const [isReworking, setIsReworking] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [copiedOutput, setCopiedOutput] = useState(false)
   const [errorCount, setErrorCount] = useState(0)
 
   useEffect(() => {
@@ -95,24 +96,44 @@ const PlaywrightPage = ({ story, credentials, onBack, onGoToDashboard }) => {
           </div>
           <p style={{ color: '#94a3b8', margin: '0.5rem 0 0' }}>Dynamic Scripting Engine for {story.id}</p>
         </div>
-        <div style={{ display: 'flex', gap: '1rem' }}>
+        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
           {errorCount > 0 && (
             <button 
               onClick={handleRework} 
               disabled={isReworking} 
-              style={{ width: 'auto', padding: '1rem 2rem', background: 'rgba(245, 158, 11, 0.2)', color: '#f59e0b', border: '1px solid #f59e0b' }}
+              style={{ width: 'auto', padding: '0.8rem 1rem', background: 'rgba(245, 158, 11, 0.2)', color: '#f59e0b', border: '1px solid #f59e0b', fontSize: '0.9rem' }}
             >
               {isReworking ? 'Reworking...' : '🔄 Fix Errors'}
             </button>
           )}
-          <button onClick={handleDownload} className="btn-secondary" style={{ width: 'auto' }}>Download .ts</button>
+          <button onClick={handleDownload} className="btn-secondary" style={{ width: 'auto', padding: '0.8rem 1rem', fontSize: '0.9rem' }}>Download .ts</button>
+          
           <button 
-            onClick={handleRunTest} 
-            disabled={isRunning || isGenerating || isReworking} 
-            style={{ width: 'auto', padding: '1rem 2rem', background: isRunning ? '#1e293b' : 'linear-gradient(135deg, #6366f1, #818cf8)', fontSize: '1rem' }}
+            onClick={() => setTestOutput(null)} 
+            title="Clear Terminal"
+            style={{ width: 'auto', padding: '0.4rem 1rem', background: 'rgba(255,255,255,0.05)', fontSize: '1.2rem', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px' }}
           >
-            {isRunning ? 'Running Test...' : '▶ Launch Automation'}
+            🗑️
           </button>
+          
+          {isRunning ? (
+            <button 
+              onClick={() => { setIsRunning(false); setTestOutput(prev => prev + '\n⚠️ Test aborted from UI.\n'); }} 
+              title="Stop Test"
+              style={{ width: 'auto', padding: '0.4rem 1.2rem', background: '#ef4444', fontSize: '1.2rem', border: 'none', color: 'white', borderRadius: '8px' }}
+            >
+              ⏹️
+            </button>
+          ) : (
+            <button 
+              onClick={handleRunTest} 
+              disabled={isGenerating || isReworking} 
+              title="Run Test"
+              style={{ width: 'auto', padding: '0.4rem 1.2rem', background: 'linear-gradient(135deg, #10b981, #059669)', fontSize: '1.2rem', border: 'none', color: 'white', borderRadius: '8px', opacity: (isGenerating || isReworking) ? 0.5 : 1 }}
+            >
+              ▶
+            </button>
+          )}
         </div>
       </header>
 
@@ -120,8 +141,12 @@ const PlaywrightPage = ({ story, credentials, onBack, onGoToDashboard }) => {
         <div className="glass-card" style={{ padding: '2rem', height: 'fit-content' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
             <h3 style={{ margin: 0, color: '#818cf8' }}>Source Code (.ts)</h3>
-            <button onClick={copyToClipboard} style={{ width: 'auto', padding: '0.5rem 1rem', background: 'rgba(255,255,255,0.05)' }}>
-              {copied ? 'Copied!' : 'Copy Code'}
+            <button 
+              onClick={copyToClipboard} 
+              title="Copy Code"
+              style={{ width: 'auto', padding: '0.4rem 0.8rem', background: 'rgba(255,255,255,0.05)', fontSize: '1.25rem', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '6px' }}
+            >
+              {copied ? '✅' : '📋'}
             </button>
           </div>
           
@@ -154,7 +179,21 @@ const PlaywrightPage = ({ story, credentials, onBack, onGoToDashboard }) => {
         </div>
 
         <div className="glass-card" style={{ padding: '2rem', display: 'flex', flexDirection: 'column' }}>
-          <h3 style={{ margin: '0 0 1rem', color: '#10b981' }}>Live Test Output</h3>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+            <h3 style={{ margin: 0, color: '#10b981' }}>Live Test Output</h3>
+            <button 
+              onClick={() => {
+                navigator.clipboard.writeText(testOutput || '')
+                setCopiedOutput(true)
+                setTimeout(() => setCopiedOutput(false), 2000)
+              }} 
+              title="Copy Output"
+              style={{ width: 'auto', padding: '0.4rem 0.8rem', background: 'rgba(255,255,255,0.05)', fontSize: '1.25rem', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '6px' }}
+              disabled={!testOutput}
+            >
+              {copiedOutput ? '✅' : '📋'}
+            </button>
+          </div>
           <div style={{ 
             background: '#000', 
             padding: '1.5rem', 
