@@ -41,6 +41,7 @@ export const fetchUserStory = async (baseUrl, email, token, storyId) => {
     };
   } catch (error) {
     console.error('Error fetching Jira story:', error);
-    throw error;
+    const message = error.response?.data?.error || error.response?.data?.message || error.message || 'Failed to fetch the story. Check your ID and API token.';
+    throw new Error(message);
   }
 };

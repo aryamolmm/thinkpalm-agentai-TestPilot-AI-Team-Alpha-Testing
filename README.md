@@ -26,7 +26,7 @@ A premium, end-to-end dashboard designed to bridge the gap between Jira Story ma
 ## 📂 Project Structure
 - `src/components/`: React UI components (Login, Dashboard, QA Suite, Playwright IDE).
 - `src/services/`: Business logic for Jira API, Test Case Generation, and Script Templates.
-- `server.js`: The backend proxy and test runner engine.
+- `api/index.js`: The backend proxy and test runner engine (compatible with Vercel and Local).
 - `tests/`: Directory where dynamic Playwright scripts are stored and executed.
 
 ## 🚀 Getting Started
@@ -48,7 +48,7 @@ You need to run both the frontend and the backend proxy:
 
 **Terminal 1 (Backend Proxy & Runner):**
 ```powershell
-node server.js
+npm start
 ```
 
 **Terminal 2 (Frontend):**

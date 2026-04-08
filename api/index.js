@@ -18,8 +18,11 @@ app.post('/api/jira/fetch', async (req, res) => {
   if (!baseUrl || !email || !token || !storyId) {
     return res.status(400).json({ error: 'Missing required credentials' });
   }
-  const urlMatch = baseUrl.match(/https?:\/\/[^/]+/);
-  const url = urlMatch ? urlMatch[0] : baseUrl.replace(/\/$/, '');
+  let url = baseUrl.trim();
+  if (!url.startsWith('http')) {
+    url = `https://${url}`;
+  }
+  url = url.replace(/\/+$/, '');
   const authHeader = Buffer.from(`${email}:${token}`).toString('base64');
   try {
     const response = await axios.get(`${url}/rest/api/3/issue/${storyId}`, {
