@@ -4,6 +4,7 @@ import axios from 'axios';
 import { exec } from 'child_process';
 import { writeFile, mkdir } from 'fs/promises';
 import { join } from 'path';
+import { tmpdir } from 'os';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
 const app = express();
@@ -135,12 +136,11 @@ app.post('/api/test/run', async (req, res) => {
   const { script, id } = req.body;
   if (!script) return res.status(400).json({ error: 'No script provided' });
   try {
-    const testsDir = join(process.cwd(), 'tests');
+    const testsDir = join(tmpdir(), 'tests');
     try { await mkdir(testsDir, { recursive: true }); } catch (e) {}
     const testPath = join(testsDir, `${id}_test.spec.ts`);
-    const relativePath = `tests/${id}_test.spec.ts`;
     await writeFile(testPath, script);
-    exec(`npx playwright test "${relativePath}" --reporter=list`, (err, stdout, stderr) => {
+    exec(`npx playwright test "${testPath}" --reporter=list`, (err, stdout, stderr) => {
       res.json({ success: !err, output: stdout, error: err ? stderr || err.message : null });
     });
   } catch (error) {
