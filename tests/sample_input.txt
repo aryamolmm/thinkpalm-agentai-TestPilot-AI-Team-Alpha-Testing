@@ -1,4 +1,0 @@
-User wants to sign in to the application.
-The application should have an email field, a password field, and a login button.
-It should show an error message if the credentials are bad.
-It should redirect to the dashboard if successful.

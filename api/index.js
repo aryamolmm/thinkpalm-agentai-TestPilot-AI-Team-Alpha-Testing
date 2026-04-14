@@ -20,22 +20,7 @@ app.post('/api/jira/fetch', async (req, res) => {
     return res.status(400).json({ error: 'Missing required credentials' });
   }
 
-  // === Mini-Project Mock Functionality ===
-  if (storyId.toUpperCase() === 'MOCK-123') {
-    return res.json({
-      key: 'MOCK-123',
-      fields: {
-        summary: 'Verify E-Commerce functionality including login, add to cart, and checkout',
-        description: 'Application: https://www.saucedemo.com/ \n\nWe need to ensure that the happy path, negative path, and boundary conditions for adding items to cart and checking out are highly robust.',
-        status: { name: 'In Progress' },
-        priority: { name: 'High' },
-        assignee: { displayName: 'TestPilot Tester' },
-        created: new Date().toISOString(),
-        reporter: { displayName: 'System AI' }
-      }
-    });
-  }
-  // =======================================
+  // === Jira Logic ===
 
   let url = baseUrl.trim();
   if (!url.startsWith('http')) {
