@@ -14,10 +14,8 @@ TestPilot AI streamlines the entire Quality Assurance lifecycle. It transforms r
 ---
 
 ## 👥 Team Alpha & Contributions
-- **Lead AI Architect**: System orchestration, Multi-agent logic, and Memory layer.
-- **Frontend Engineer**: Premium React Dashboard & Super Agent Terminal UI.
-- **QA Automation Lead**: Playwright integration and Coverage Agent heuristics.
-- **Backend Developer**: Jira Proxy, API endpoints, and Groq/Gemini integration.
+- **Sherine T. (Test lead)**: primarily handled architecture design and code structuring.
+- **Aryamol M M. (Senior Software Engineer- Testing)**: primarily handled the coding and main agent creation.
 
 ---
 
