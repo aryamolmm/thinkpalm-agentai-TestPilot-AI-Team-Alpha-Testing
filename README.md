@@ -66,6 +66,14 @@ npm run server
 npm run dev
 ```
 
+---
+
+## 🎥 Video Demonstration
+[View the 5-Minute Project Walkthrough (Loom)]
+(https://www.loom.com/share/82f393eae3674a0cb835b921ea2b2919)
+
+---
+
 #### **B. CLI Pipeline**
 Run the orchestrator directly from the terminal:
 ```bash
