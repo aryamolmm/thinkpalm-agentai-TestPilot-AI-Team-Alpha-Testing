@@ -261,7 +261,7 @@ function App() {
           )}
           {activeTab === 'manual_exec' && currentStory && <ManualExecutionPage story={currentStory} />}
           {activeTab === 'auto_exec' && currentStory && <ExecutionPage story={currentStory} credentials={credentials} />}
-          {activeTab === 'exec_report' && <ExecutionReport />}
+          {activeTab === 'exec_report' && <ExecutionReport story={currentStory} />}
         </div>
       </main>
     </div>

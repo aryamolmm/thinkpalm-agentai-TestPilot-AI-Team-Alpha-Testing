@@ -16,20 +16,34 @@ const TestCasePage = ({ story, credentials, onBack, onGoToAutomation }) => {
 
   const [editingIndex, setEditingIndex] = useState(null)
   const [editFormData, setEditFormData] = useState({})
-  const [testFormat, setTestFormat] = useState('bdd')
+  const PREF_KEY = `testpilot_prefs_${story?.id}`;
+
+  const [testFormat, setTestFormat] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(PREF_KEY))?.testFormat || 'bdd'; } catch { return 'bdd'; }
+  })
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
   const dropdownRef = useRef(null)
-  const [selectedTypes, setSelectedTypes] = useState({
-    happy: true,
-    negative: true,
-    edge: true,
-    performance: false,
-    security: false
+  const [selectedTypes, setSelectedTypes] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(PREF_KEY))?.selectedTypes;
+      return saved || { happy: true, negative: true, edge: true, performance: false, security: false };
+    } catch {
+      return { happy: true, negative: true, edge: true, performance: false, security: false };
+    }
   })
 
   const toggleType = (type) => {
-    setSelectedTypes(prev => ({ ...prev, [type]: !prev[type] }))
+    setSelectedTypes(prev => {
+      const next = { ...prev, [type]: !prev[type] };
+      try { const p = JSON.parse(localStorage.getItem(PREF_KEY) || '{}'); localStorage.setItem(PREF_KEY, JSON.stringify({ ...p, selectedTypes: next })); } catch {}
+      return next;
+    })
   }
+
+  // Persist testFormat changes
+  useEffect(() => {
+    try { const p = JSON.parse(localStorage.getItem(PREF_KEY) || '{}'); localStorage.setItem(PREF_KEY, JSON.stringify({ ...p, testFormat })); } catch {}
+  }, [testFormat])
 
   const getActiveKey = () => {
     switch (credentials.engine) {
@@ -81,9 +95,19 @@ const TestCasePage = ({ story, credentials, onBack, onGoToAutomation }) => {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
-  // Run analysis on mount
+  // On mount: load from cache if exists, otherwise auto-generate
   useEffect(() => {
-    performAnalysis()
+    const cached = localStorage.getItem(`testpilot_cases_${story?.id}`);
+    if (cached) {
+      try {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setTestCases(parsed);
+          return; // Don't re-generate if cached cases exist
+        }
+      } catch {}
+    }
+    performAnalysis();
   }, [])
 
   const handleEditRow = (index, tc) => {
@@ -100,6 +124,7 @@ const TestCasePage = ({ story, credentials, onBack, onGoToAutomation }) => {
     const updatedCases = [...testCases]
     updatedCases[index] = { ...editFormData }
     setTestCases(updatedCases)
+    localStorage.setItem(`testpilot_cases_${story?.id}`, JSON.stringify(updatedCases))
     setEditingIndex(null)
     setEditFormData({})
   }
@@ -107,6 +132,7 @@ const TestCasePage = ({ story, credentials, onBack, onGoToAutomation }) => {
   const handleDeleteRow = (index) => {
     const updatedCases = testCases.filter((_, i) => i !== index)
     setTestCases(updatedCases)
+    localStorage.setItem(`testpilot_cases_${story?.id}`, JSON.stringify(updatedCases))
   }
 
   const downloadFile = (content, fileName, type) => {

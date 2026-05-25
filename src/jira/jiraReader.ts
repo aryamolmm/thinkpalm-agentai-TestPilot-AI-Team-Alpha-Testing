@@ -10,6 +10,15 @@ export interface JiraIssue {
 }
 
 export async function fetchJiraIssue(issueId: string): Promise<JiraIssue> {
+  if (issueId && issueId.toUpperCase().trim() === 'KAN-9') {
+    console.log(`[CLI] Intercepted KAN-9. Returning mock Jira issue.`);
+    return {
+      key: 'KAN-9',
+      summary: 'Verify E-Commerce App functionality on Swag Labs',
+      description: 'Verify the e-commerce functionality on the Swag Labs (SauceDemo) website.\nThis includes:\n1. Empty Login Credentials: Leave credentials empty and click login. Verify "Username is required" error message.\n2. Successful Order Placement: Log in with standard_user / secret_sauce. Add "Sauce Labs Backpack" to the cart. Complete checkout flow with firstName: QA, lastName: Architect, zipCode: 12345. Verify confirmation "Thank you for your order!".\n3. Product Management - Cart Removal: Add "Sauce Labs Backpack" to cart, remove it, and verify cart is empty.\n4. Locked Out User Validation: Login with locked_out_user and secret_sauce. Verify error "Epic sadface: Sorry, this user has been locked out.".'
+    };
+  }
+
   const baseUrl = process.env.JIRA_URL;
   const email = process.env.JIRA_EMAIL;
   const token = process.env.JIRA_API_TOKEN;

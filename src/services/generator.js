@@ -33,7 +33,7 @@ export const generateTestCasesAI = async (story, apiKey, engine = 'gemini', type
 /**
  * QA Engine 2: Automation Code Forging (AI Driven)
  */
-export const generateAutomationScriptAI = async (story, apiKey, engine = 'gemini', tool = 'playwright', language = 'typescript', framework = 'none', mappingMode = 'ai') => {
+export const generateAutomationScriptAI = async (story, apiKey, engine = 'gemini', tool = 'playwright', language = 'typescript', framework = 'none', mappingMode = 'ai', testCases = []) => {
   const PROXY_URL = getProxyUrl();
   const userMemory = localStorage.getItem('testpilot_ai_memory') || '';
 
@@ -47,7 +47,8 @@ export const generateAutomationScriptAI = async (story, apiKey, engine = 'gemini
       tool,
       language,
       framework,
-      mappingMode
+      mappingMode,
+      testCases   // pass the actual BDD test cases
     });
     return response.data.script;
 

@@ -1,20 +1,11 @@
 [
   {
-    "id": "1778651321717",
-    "test_case_id": "TC-01",
-    "status": "Not Run",
-    "comments": "Manual",
-    "execution_time": 0,
-    "timestamp": "2026-05-13T05:48:41.717Z",
-    "manual": true
-  },
-  {
-    "id": "1778662713710",
+    "id": "1779691652854",
     "test_case_id": "TC-01",
     "status": "Fail",
     "comments": "AI Agent execution finished with status: Failed",
     "execution_time": 0,
-    "timestamp": "2026-05-13T08:58:33.710Z",
+    "timestamp": "2026-05-25T06:47:32.854Z",
     "manual": false
   }
 ]

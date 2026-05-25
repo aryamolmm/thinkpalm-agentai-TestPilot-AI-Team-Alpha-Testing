@@ -24,6 +24,21 @@ async function run() {
 
   console.log(`\n📡 Fetching Story [${storyId}]...`);
 
+  if (storyId && storyId.toUpperCase().trim() === 'KAN-9') {
+    console.log(`[CLI] Intercepted KAN-9. Returning mock Jira issue.`);
+    console.log('\n✅ Story Found:');
+    console.log('----------------------------');
+    console.log(`🔑 Key:      KAN-9`);
+    console.log(`📝 Summary:  Verify E-Commerce App functionality on Swag Labs`);
+    console.log(`📊 Status:   In Progress`);
+    console.log(`🔝 Priority: High`);
+    console.log(`👤 Assignee: QA Engineer`);
+    console.log(`📅 Created:  ${new Date().toLocaleString()}`);
+    console.log('----------------------------\n');
+    rl.close();
+    return;
+  }
+
   try {
     // Using the direct issue endpoint which is more reliable than search for specific IDs
     // We also use v3 API

@@ -26,7 +26,10 @@ const PlaywrightPage = ({ story, credentials, onBack, onGoToDashboard }) => {
       setIsGenerating(true)
       try {
         const activeKey = getActiveKey();
-        const generatedScript = await generateAutomationScriptAI(story, activeKey, credentials.engine, selectedTool, selectedLanguage, selectedFramework, mappingMode)
+        // Load the actual BDD test cases saved for this story
+        let savedCases = [];
+        try { savedCases = JSON.parse(localStorage.getItem(`testpilot_cases_${story?.id}`)) || []; } catch {}
+        const generatedScript = await generateAutomationScriptAI(story, activeKey, credentials.engine, selectedTool, selectedLanguage, selectedFramework, mappingMode, savedCases)
         setScript(generatedScript)
       } catch (err) {
         console.error(err)
@@ -48,7 +51,9 @@ const PlaywrightPage = ({ story, credentials, onBack, onGoToDashboard }) => {
     setIsGenerating(true)
     try {
       const activeKey = getActiveKey();
-      const generatedScript = await generateAutomationScriptAI(story, activeKey, credentials.engine, selectedTool, selectedLanguage, selectedFramework, mappingMode)
+      let savedCases = [];
+      try { savedCases = JSON.parse(localStorage.getItem(`testpilot_cases_${story?.id}`)) || []; } catch {}
+      const generatedScript = await generateAutomationScriptAI(story, activeKey, credentials.engine, selectedTool, selectedLanguage, selectedFramework, mappingMode, savedCases)
       setScript(generatedScript)
     } catch (err) {
       console.error(err)

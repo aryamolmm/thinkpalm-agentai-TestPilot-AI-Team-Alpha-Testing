@@ -21,6 +21,10 @@ const ExecutionPage = ({ story, credentials }) => {
   const [screenshots, setScreenshots] = useState({}); 
   const [contextCode, setContextCode] = useState('');
   
+  const [targetUrl, setTargetUrl] = useState('');
+  const [targetUser, setTargetUser] = useState('');
+  const [targetPass, setTargetPass] = useState('');
+  
   const eventSourceRef = useRef(null);
   const logEndRef = useRef(null);
 
@@ -170,7 +174,8 @@ const ExecutionPage = ({ story, credentials }) => {
         engine,
         contextCode,
         userInstructions: storedInstruction || story.Description || fallbackInstruction || '',
-        credentials
+        credentials,
+        envConfig: { url: targetUrl, user: targetUser, pass: targetPass }
       });
 
       const { executionId } = resp.data;
@@ -312,6 +317,36 @@ const ExecutionPage = ({ story, credentials }) => {
                     <option value="manual" style={{ background: '#0f172a' }}>Story Default Steps</option>
                 )}
             </select>
+        </div>
+
+        {/* Target Environment */}
+        <div style={{ background: 'rgba(255,255,255,0.03)', padding: '0.75rem', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.05)' }}>
+            <label style={{ display: 'block', fontSize: '0.7rem', color: '#6366f1', fontWeight: 600, marginBottom: '0.6rem', textTransform: 'uppercase' }}>Target Environment</label>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                <input 
+                    type="text" 
+                    placeholder="Application URL (e.g., http://192.168.2.67/login)" 
+                    value={targetUrl}
+                    onChange={(e) => setTargetUrl(e.target.value)}
+                    style={{ width: '100%', background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.05)', color: '#f8fafc', padding: '0.5rem 0.8rem', borderRadius: '8px', fontSize: '0.85rem', outline: 'none' }}
+                />
+                <div style={{ display: 'flex', gap: '0.6rem' }}>
+                    <input 
+                        type="text" 
+                        placeholder="Username" 
+                        value={targetUser}
+                        onChange={(e) => setTargetUser(e.target.value)}
+                        style={{ flex: 1, background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.05)', color: '#f8fafc', padding: '0.5rem 0.8rem', borderRadius: '8px', fontSize: '0.85rem', outline: 'none', minWidth: 0 }}
+                    />
+                    <input 
+                        type="password" 
+                        placeholder="Password" 
+                        value={targetPass}
+                        onChange={(e) => setTargetPass(e.target.value)}
+                        style={{ flex: 1, background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.05)', color: '#f8fafc', padding: '0.5rem 0.8rem', borderRadius: '8px', fontSize: '0.85rem', outline: 'none', minWidth: 0 }}
+                    />
+                </div>
+            </div>
         </div>
 
         {/* Steps List */}

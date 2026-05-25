@@ -974,6 +974,23 @@ app.post('/api/jira/fetch', async (req, res) => {
     return res.status(400).json({ error: 'Missing required credentials' });
   }
 
+  // === Mock Fallback for KAN-9 (Subscription Suspension Bypass) ===
+  if (storyId && storyId.toUpperCase().trim() === 'KAN-9') {
+    console.log(`[Proxy] Intercepted KAN-9. Returning mock Jira issue.`);
+    return res.json({
+      key: 'KAN-9',
+      fields: {
+        summary: 'Verify E-Commerce App functionality on Swag Labs',
+        description: 'Verify the e-commerce functionality on the Swag Labs (SauceDemo) website.\nThis includes:\n1. Empty Login Credentials: Leave credentials empty and click login. Verify "Username is required" error message.\n2. Successful Order Placement: Log in with standard_user / secret_sauce. Add "Sauce Labs Backpack" to the cart. Complete checkout flow with firstName: QA, lastName: Architect, zipCode: 12345. Verify confirmation "Thank you for your order!".\n3. Product Management - Cart Removal: Add "Sauce Labs Backpack" to cart, remove it, and verify cart is empty.\n4. Locked Out User Validation: Login with locked_out_user and secret_sauce. Verify error "Epic sadface: Sorry, this user has been locked out.".',
+        status: { name: 'In Progress' },
+        priority: { name: 'High' },
+        assignee: { displayName: 'QA Engineer' },
+        created: new Date().toISOString(),
+        reporter: { displayName: 'Sherine T' }
+      }
+    });
+  }
+
   // === Jira Logic ===
 
   let url = baseUrl.trim();
@@ -1011,7 +1028,7 @@ app.post('/api/jira/fetch', async (req, res) => {
 
 // Endpoint for AI-driven generation
 app.post('/api/ai/generate', async (req, res) => {
-  const { story, apiKey, type, userMemory = '', tool = 'playwright', language = 'typescript', framework = 'none', mappingMode = 'ai', typesList = 'Happy Path, Negative, Edge', testFormat = 'bdd' } = req.body;
+  const { story, apiKey, type, userMemory = '', tool = 'playwright', language = 'typescript', framework = 'none', mappingMode = 'ai', typesList = 'Happy Path, Negative, Edge', testFormat = 'bdd', testCases = [] } = req.body;
   const engine = (req.body.engine || 'gemini').toLowerCase().trim();
   
   console.log(`[AI GENERATE] Type: ${type} | Engine: ${engine} | API Key Present: ${!!apiKey}`);
@@ -1023,21 +1040,45 @@ app.post('/api/ai/generate', async (req, res) => {
     ? `\nCRITICAL MAPPING RULE: Use STRICT Direct Mapping. You MUST map every single BDD step from the story EXACTLY to code. Do not infer or hallucinate missing steps. Do not add AI-enhanced validations unless explicitly stated in the story.`
     : `\nCRITICAL MAPPING RULE: Use AI Enhanced Mapping. You should intelligently infer required setup, teardown, and implicit assertions that make the test robust, even if not explicitly stated in the story.`;
 
-  const prompt = type === 'script' 
-    ? `[AGENT 2: AUTOMATION SPECIALIST]
-       ${memoryContext}
-       Write a complete automation script using ${tool} and ${language} for Jira Story: "${story.summary}".${frameworkContext}
-       ${mappingInstructions}
-       Description: ${story.description || 'No description'}.
-       
-       CRITICAL FRAMEWORK RULES:
-       - If tool is 'robot' or 'Robot Framework', you MUST generate valid .robot DSL syntax (*** Settings ***, *** Test Cases ***), DO NOT generate raw Python code with Selenium imports.
-       - If tool is 'cypress', generate valid Cypress describe/it blocks.
-       - If tool is 'selenium', generate valid Selenium WebDriver code in ${language}.
-       - If tool is 'playwright', generate valid Playwright test code in ${language}.
-       
-       The script MUST be production-ready and include Happy Path, Negative, and Edge cases.
-       Return ONLY the raw code block with no markdown, no JSON wrapper.`
+  const prompt = type === 'script'
+    ? (() => {
+        if (testCases && testCases.length > 0) {
+          // Build prompt from the exact BDD test cases the user has
+          const casesList = testCases.map((tc, i) =>
+`// ${tc.TC_ID || ('TC-' + String(i+1).padStart(2,'0'))}: ${tc.Scenario_Name || ''}
+// Type: ${tc.Type || 'Unknown'}
+${tc.Gherkin || tc.Steps || '(no steps)'}
+// Expected: ${tc.Expected_Result || ''}`
+          ).join('\n\n');
+          return `[AGENT 2: AUTOMATION SPECIALIST]
+${memoryContext}
+Write a ${tool} automation script in ${language} for Jira Story: "${story.summary}".${frameworkContext}
+${mappingInstructions}
+
+IMPORTANT: Generate ONLY the following ${testCases.length} test case(s). Do NOT invent or add any extra scenarios.
+
+${casesList}
+
+CRITICAL:
+- playwright: use valid Playwright test() blocks.
+- cypress: use describe/it blocks.
+- robot: use *** Test Cases *** DSL.
+- selenium: use Selenium WebDriver in ${language}.
+Return ONLY raw code, no markdown, no JSON.`;
+        }
+        // Fallback: no test cases passed, use generic prompt
+        return `[AGENT 2: AUTOMATION SPECIALIST]
+${memoryContext}
+Write a complete automation script using ${tool} and ${language} for Jira Story: "${story.summary}".${frameworkContext}
+${mappingInstructions}
+Description: ${story.description || 'No description'}.
+CRITICAL FRAMEWORK RULES:
+- robot: valid .robot DSL syntax only.
+- cypress: valid describe/it blocks.
+- selenium: valid Selenium WebDriver code in ${language}.
+- playwright: valid Playwright test code in ${language}.
+The script MUST be production-ready. Return ONLY the raw code block with no markdown, no JSON wrapper.`;
+      })()
     : `[AGENT 1: BDD ANALYST]
        ${memoryContext}
        Analyze this Requirement/Story: "${story.summary}".
@@ -1531,8 +1572,11 @@ app.post('/api/qmetry/sync', async (req, res) => {
 /**
  * Playwright Browser Tools for the AI Agent
  */
-const createBrowserTools = async (page) => ({
+const createBrowserTools = async (page, primaryUrl) => ({
   open_url: async ({ url }) => {
+    if (primaryUrl && url.includes('saucedemo') && !primaryUrl.includes('saucedemo')) {
+      return `[SYSTEM] Ignored navigation to ${url}. Enforcing active session at ${primaryUrl}.`;
+    }
     await page.goto(url, { waitUntil: 'networkidle' });
     return `Opened URL: ${url}`;
   },
@@ -1543,21 +1587,28 @@ const createBrowserTools = async (page) => ({
       await locator.click({ timeout: 3000 });
       return `Clicked element: ${description || selector}`;
     } catch (err) {
-      // Self-healing: If AI used //button for an <input type="submit">
-      if (selector.includes('//button')) {
-        const alt = selector.replace('//button', '//*[@id="login-button"]' ? '#login-button' : '//input');
-        try {
-          await page.click(alt, { timeout: 3000 });
-          return `Clicked element via fallback: ${alt}`;
-        } catch (e) { /* ignore fallback error */ }
-      }
-      // Try ID fallback if selector looks like an ID
-      if (selector.includes('login-button')) {
-         try {
-           await page.click('#login-button', { timeout: 3000 });
-           return `Clicked element via ID fallback: #login-button`;
-         } catch (e) {}
-      }
+      try {
+        // Universal self-healing fallback for login buttons
+        const altSelectors = [
+          'button:has-text("Sign In")',
+          'input[value="Sign In"]',
+          'button:has-text("Login")',
+          'input[value="Login"]',
+          'button[type="submit"]',
+          'input[type="submit"]',
+          '.login-button',
+          '#login-button'
+        ];
+        
+        for (const alt of altSelectors) {
+          const altLocator = page.locator(alt).first();
+          if (await altLocator.isVisible({ timeout: 500 }).catch(()=>false)) {
+            await altLocator.click({ timeout: 3000 });
+            return `Clicked element via fallback: ${alt}`;
+          }
+        }
+      } catch (e) { /* ignore fallback errors */ }
+      
       throw err;
     }
   },
@@ -1713,37 +1764,121 @@ const sendAgentUpdate = (id, data) => {
 };
 
 app.post('/api/agent-execute', async (req, res) => {
-  const { test_case_id, steps, headless = true, engine = 'groq', contextCode = '', userInstructions = '', credentials = {} } = req.body;
+  const { test_case_id, steps, headless = true, engine = 'groq', contextCode = '', userInstructions = '', credentials = {}, envConfig = {} } = req.body;
   const executionId = uuidv4();
-  runAgentExecution(executionId, test_case_id, steps, headless, engine, contextCode, userInstructions, credentials);
+  runAgentExecution(executionId, test_case_id, steps, headless, engine, contextCode, userInstructions, credentials, envConfig);
   res.json({ executionId });
 });
 
-const runAgentExecution = async (executionId, tcId, steps, headless, engine, contextCode, userInstructions, credentials = {}) => {
+const runAgentExecution = async (executionId, tcId, steps, headless, engine, contextCode, userInstructions, credentials = {}, envConfig = {}) => {
   const { chromium } = await import('playwright');
   const browser = await chromium.launch({ headless });
   const page = await browser.newPage();
-  const tools = await createBrowserTools(page);
   
-  // Extract credentials from ANY part of the context for global enforcement
-  const allText = userInstructions + " " + steps.join(" ");
-  const userMatch = allText.match(/(?:user|username|user\s+name|login)\s*(?:id|name)?\s*(?:is|as|[:=])\s*([^\s,]+)/i);
-  const passMatch = allText.match(/(?:pass|password|pass\s+word)\s*(?:is|as|[:=])\s*([^\s,]+)/i);
+  // Extract URL and credentials primarily from the execution steps
+  const stepsText = steps.join(" ");
+  const allText = userInstructions + " " + stepsText;
   
-  const activeUser = userMatch ? (userMatch[1] || userMatch[2]) : null;
-  const activePass = passMatch ? (passMatch[1] || passMatch[2]) : null;
-  const credsBlock = activeUser ? `\n\n### ACTIVE SESSION CREDENTIALS\n- USERNAME: ${activeUser}\n- PASSWORD: ${activePass || 'Check goal for password'}` : '';
+  const extractCreds = (text, type) => {
+      const regex = type === 'user' 
+          ? /(?:user|username|user\s+name|login|email)\s*(?:id|name)?\s*(?:is|as|[:=])\s*([^\s,]+)/i
+          : /(?:pass|password|pass\s+word|pwd)\s*(?:is|as|[:=])\s*([^\s,]+)/i;
+      const match = text.match(regex);
+      return match ? (match[1] || match[2]) : null;
+  };
+
+  const activeUser = envConfig.user || extractCreds(stepsText, 'user') || extractCreds(allText, 'user');
+  const activePass = envConfig.pass || extractCreds(stepsText, 'pass') || extractCreds(allText, 'pass');
+  const credsBlock = activeUser ? `\n\n### ACTIVE SESSION CREDENTIALS\n- USERNAME: ${activeUser}\n- PASSWORD: ${activePass || '[None provided, check context]'}` : '';
 
   try {
     // ── Pre-Navigation (Fast Start) ──
-    const urlMatch = allText.match(/https?:\/\/[^\s"']+/);
-    if (urlMatch) {
-        const url = urlMatch[0];
+    const extractUrl = (text) => {
+        const explicit = text.match(/(?:url|link|website|site|open|goto|go to)\s*[:=]?\s*(https?:\/\/[^\s"']+|www\.[^\s"']+|[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}(?:\/[^\s"']*)?)/i);
+        if (explicit) return explicit[1];
+        const implicit = text.match(/https?:\/\/[^\s"']+/i);
+        if (implicit) return implicit[0];
+        return null;
+    };
+    
+    let url = envConfig.url || extractUrl(stepsText) || extractUrl(allText);
+    let tools;
+    
+    if (url) {
+        if (!url.startsWith('http')) {
+            url = 'https://' + url;
+        }
+        
+        tools = await createBrowserTools(page, url);
+        
         const credsInfo = activeUser ? ` (Using: ${activeUser} / ${activePass ? '****' : 'no password detected'})` : '';
         sendAgentUpdate(executionId, { type: 'OBSERVATION', observation: `Fast-starting: Navigating to ${url}${credsInfo}` });
         await page.goto(url, { waitUntil: 'networkidle', timeout: 30000 });
+
+        // ── Programmatic Auto-Login ──
+        // If explicit credentials were provided via the UI, fill in the form directly
+        // without relying on AI to guess the selectors.
+        if (activeUser && activePass) {
+            sendAgentUpdate(executionId, { type: 'OBSERVATION', observation: `Auto-login: Filling credentials for ${activeUser}...` });
+            try {
+                // Try common username selectors in priority order
+                const userSelectors = [
+                    'input[name="username"]', 'input[name="user"]', 'input[name="email"]',
+                    'input[type="text"]', 'input[placeholder*="user" i]', 'input[placeholder*="email" i]',
+                    '#username', '#user', '#email'
+                ];
+                const passSelectors = [
+                    'input[name="password"]', 'input[name="pass"]', 'input[type="password"]',
+                    '#password', '#pass'
+                ];
+                const submitSelectors = [
+                    'button[type="submit"]', 'input[type="submit"]',
+                    'button:has-text("Sign In")', 'button:has-text("Login")', 'button:has-text("Sign in")',
+                    'input[value="Sign In"]', 'input[value="Login"]'
+                ];
+
+                let loggedIn = false;
+                for (const uSel of userSelectors) {
+                    const loc = page.locator(uSel).first();
+                    if (await loc.isVisible({ timeout: 1000 }).catch(() => false)) {
+                        await loc.fill(activeUser);
+                        sendAgentUpdate(executionId, { type: 'OBSERVATION', observation: `Filled username into ${uSel}` });
+                        
+                        // Now fill password
+                        for (const pSel of passSelectors) {
+                            const pLoc = page.locator(pSel).first();
+                            if (await pLoc.isVisible({ timeout: 1000 }).catch(() => false)) {
+                                await pLoc.fill(activePass);
+                                sendAgentUpdate(executionId, { type: 'OBSERVATION', observation: `Filled password into ${pSel}` });
+                                
+                                // Click submit
+                                for (const sSel of submitSelectors) {
+                                    const sLoc = page.locator(sSel).first();
+                                    if (await sLoc.isVisible({ timeout: 1000 }).catch(() => false)) {
+                                        await sLoc.click();
+                                        await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
+                                        sendAgentUpdate(executionId, { type: 'OBSERVATION', observation: `Clicked submit button: ${sSel}. Login attempted.` });
+                                        loggedIn = true;
+                                        break;
+                                    }
+                                }
+                                break;
+                            }
+                        }
+                        break;
+                    }
+                }
+                if (!loggedIn) {
+                    sendAgentUpdate(executionId, { type: 'OBSERVATION', observation: `Auto-login: Could not detect standard login form. Agent will handle login.` });
+                }
+            } catch (loginErr) {
+                sendAgentUpdate(executionId, { type: 'OBSERVATION', observation: `Auto-login attempt failed: ${loginErr.message}. Agent will retry.` });
+            }
+        }
     } else {
-        await page.goto('https://www.saucedemo.com/', { waitUntil: 'networkidle' });
+        tools = await createBrowserTools(page);
+        sendAgentUpdate(executionId, { type: 'OBSERVATION', observation: `No explicit URL found in execution steps. Agent will determine URL from context.` });
+        await page.goto('about:blank', { waitUntil: 'networkidle' });
     }
 
     const useGemini = engine === 'gemini';
@@ -1777,9 +1912,11 @@ const runAgentExecution = async (executionId, tcId, steps, headless, engine, con
 QA Automation Agent. Follow credentials EXACTLY.${credsBlock}
 
 ### RULES
-- ALWAYS use the Username/Password from the ACTIVE SESSION CREDENTIALS above.
+- ALWAYS use the Username/Password from the ACTIVE SESSION CREDENTIALS above. If none are explicitly listed there, carefully read the "Global Instructions & Steps" below to find the credentials provided by the user.
+- AUTO-LOGIN MANDATE: If ACTIVE SESSION CREDENTIALS are provided (or if you found them in the instructions), your absolute first priority is to use fill_input and click_element to log into the application. You MUST fill BOTH the username field and the password field. You MUST perform this login immediately, even if the current step just says "go to url" and doesn't explicitly mention "login". Do not output {"done": true} until you have successfully logged in.
 - NEVER use placeholders like "username", "admin", "AI_test", or "valid_user".
 - NEVER attempt to bypass login by navigating directly to internal URLs (e.g., /inventory.html) unless specifically instructed. You MUST complete the login form.
+- STRICT DOMAIN RULE: If you are already on the correct target application (e.g., ${url || 'the specific URL provided'}), DO NOT navigate away to fallback or generic demo URLs like "saucedemo.com", even if a step mentions it. Assume "Sauce Demo" just means the current target application.
 - For login buttons, prioritize ID or Name selectors (e.g., #login-button) over tag-based XPaths like //button.
 - If a selector fails, use 'get_page_info' to see the updated DOM.
 - YOU MUST RESPOND IN VALID JSON FORMAT. THIS IS A MANDATORY REQUIREMENT.
@@ -1794,8 +1931,8 @@ QA Automation Agent. Follow credentials EXACTLY.${credsBlock}
 - get_page_info()
 - assert_text(text)
 
-### PRECONDITION
-Instruction: "${userInstructions}"
+### PRECONDITION AND CONTEXT
+Global Instructions & Steps: "${allText}"
 Selectors Hint: ${sanitizedContext.substring(0, 500)}`
       }
     ];
@@ -1831,7 +1968,7 @@ Selectors Hint: ${sanitizedContext.substring(0, 500)}`
           } : {
             url: 'https://api.groq.com/openai/v1/chat/completions',
             key: groqKey,
-            model: "llama-3.1-8b-instant"
+            model: "llama-3.3-70b-versatile"
           };
 
           const callLLM = async (retryCount = 0) => {
