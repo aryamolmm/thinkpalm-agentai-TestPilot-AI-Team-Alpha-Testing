@@ -1093,8 +1093,9 @@ The script MUST be production-ready. Return ONLY the raw code block with no mark
     let text = '';
 
     const callGemini = async () => {
-      if (!apiKey) throw new Error('Gemini API Key is required');
-      const genAI = new GoogleGenerativeAI(apiKey);
+      const geminiKey = process.env.GEMINI_API_KEY || (engine === 'gemini' ? apiKey : null);
+      if (!geminiKey) throw new Error('Gemini API Key is required');
+      const genAI = new GoogleGenerativeAI(geminiKey);
       const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro" });
       const result = await model.generateContent(prompt);
       return result.response.text();
@@ -1102,14 +1103,15 @@ The script MUST be production-ready. Return ONLY the raw code block with no mark
 
     if (engine === 'groq') {
       try {
-        const groqRes = await axios.post('https://api.groq.com/openai/v1/chat/completions', {
+        const groqKey = apiKey || process.env.GROQ_API_KEY;
+        const response = await axios.post('https://api.groq.com/openai/v1/chat/completions', {
           model: "llama-3.3-70b-versatile",
           messages: [{ role: 'user', content: prompt }],
           temperature: 0.1
         }, {
-          headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' }
+          headers: { 'Authorization': `Bearer ${groqKey}`, 'Content-Type': 'application/json' }
         });
-        text = groqRes.data.choices[0].message.content;
+        text = response.data.choices[0].message.content;
       } catch (groqErr) {
         const isRateLimit = groqErr.response?.status === 429 || (groqErr.response?.data?.error?.message || '').toLowerCase().includes('rate limit') || (groqErr.response?.data?.error?.message || '').toLowerCase().includes('tokens per day');
         if (isRateLimit) {
@@ -1120,26 +1122,29 @@ The script MUST be production-ready. Return ONLY the raw code block with no mark
         }
       }
     } else if (engine === 'openai') {
+      const oaiKey = apiKey || process.env.OPENAI_API_KEY;
       const oaiRes = await axios.post('https://api.openai.com/v1/chat/completions', {
         model: "gpt-4-turbo",
         messages: [{ role: 'user', content: prompt }],
         temperature: 0.1
       }, {
-        headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' }
+        headers: { 'Authorization': `Bearer ${oaiKey}`, 'Content-Type': 'application/json' }
       });
       text = oaiRes.data.choices[0].message.content;
     } else if (engine === 'claude') {
+      const claudeKey = apiKey || process.env.CLAUDE_API_KEY;
       const claudeRes = await axios.post('https://api.anthropic.com/v1/messages', {
         model: "claude-3-5-sonnet-20241022",
         max_tokens: 4000,
         messages: [{ role: 'user', content: prompt }],
         temperature: 0.1
       }, {
-        headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' }
+        headers: { 'x-api-key': claudeKey, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' }
       });
       text = claudeRes.data.content[0].text;
     } else if (engine === 'openrouter') {
       try {
+        const orKey = apiKey || process.env.OPENROUTER_API_KEY;
         console.log(`[OpenRouter] Calling model: deepseek/deepseek-chat for generation`);
         const orRes = await axios.post('https://openrouter.ai/api/v1/chat/completions', {
           model: "deepseek/deepseek-chat",
@@ -1147,7 +1152,7 @@ The script MUST be production-ready. Return ONLY the raw code block with no mark
           temperature: 0.1
         }, {
           headers: { 
-            'Authorization': `Bearer ${apiKey}`, 
+            'Authorization': `Bearer ${orKey}`, 
             'Content-Type': 'application/json', 
             'HTTP-Referer': 'http://localhost:5173', 
             'X-Title': 'TestPilot AI' 
@@ -1204,8 +1209,9 @@ app.post('/api/ai/rework', async (req, res) => {
     let text = '';
 
     const callGeminiRework = async () => {
-      if (!apiKey) throw new Error('Gemini API Key is required');
-      const genAI = new GoogleGenerativeAI(apiKey);
+      const geminiKey = process.env.GEMINI_API_KEY || (engine === 'gemini' ? apiKey : null);
+      if (!geminiKey) throw new Error('Gemini API Key is required');
+      const genAI = new GoogleGenerativeAI(geminiKey);
       const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro" });
       const result = await model.generateContent(prompt);
       return result.response.text();
@@ -1213,12 +1219,13 @@ app.post('/api/ai/rework', async (req, res) => {
 
     if (engine === 'groq') {
       try {
+        const groqKey = apiKey || process.env.GROQ_API_KEY;
         const groqRes = await axios.post('https://api.groq.com/openai/v1/chat/completions', {
           model: "llama-3.3-70b-versatile",
           messages: [{ role: 'user', content: prompt }],
           temperature: 0.1
         }, {
-          headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' }
+          headers: { 'Authorization': `Bearer ${groqKey}`, 'Content-Type': 'application/json' }
         });
         text = groqRes.data.choices[0].message.content;
       } catch (groqErr) {
@@ -1231,26 +1238,29 @@ app.post('/api/ai/rework', async (req, res) => {
         }
       }
     } else if (engine === 'openai') {
+      const oaiKey = apiKey || process.env.OPENAI_API_KEY;
       const oaiRes = await axios.post('https://api.openai.com/v1/chat/completions', {
         model: "gpt-4-turbo",
         messages: [{ role: 'user', content: prompt }],
         temperature: 0.1
       }, {
-        headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' }
+        headers: { 'Authorization': `Bearer ${oaiKey}`, 'Content-Type': 'application/json' }
       });
       text = oaiRes.data.choices[0].message.content;
     } else if (engine === 'claude') {
+      const claudeKey = apiKey || process.env.CLAUDE_API_KEY;
       const claudeRes = await axios.post('https://api.anthropic.com/v1/messages', {
         model: "claude-3-5-sonnet-20241022",
         max_tokens: 4000,
         messages: [{ role: 'user', content: prompt }],
         temperature: 0.1
       }, {
-        headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' }
+        headers: { 'x-api-key': claudeKey, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' }
       });
       text = claudeRes.data.content[0].text;
     } else if (engine === 'openrouter') {
       try {
+        const orKey = apiKey || process.env.OPENROUTER_API_KEY;
         console.log(`[OpenRouter] Calling model: deepseek/deepseek-chat for rework`);
         const orRes = await axios.post('https://openrouter.ai/api/v1/chat/completions', {
           model: "deepseek/deepseek-chat",
@@ -1258,7 +1268,7 @@ app.post('/api/ai/rework', async (req, res) => {
           temperature: 0.1
         }, {
           headers: { 
-            'Authorization': `Bearer ${apiKey}`, 
+            'Authorization': `Bearer ${orKey}`, 
             'Content-Type': 'application/json', 
             'HTTP-Referer': 'http://localhost:5173', 
             'X-Title': 'TestPilot AI' 

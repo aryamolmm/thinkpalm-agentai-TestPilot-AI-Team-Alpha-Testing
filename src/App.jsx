@@ -213,7 +213,7 @@ function App() {
         {/* Active engine badge */}
         <div style={{ margin: '1rem 0', padding: '0.6rem 0.8rem', background: 'rgba(99,102,241,0.08)', borderRadius: '10px', border: '1px solid rgba(99,102,241,0.15)', fontSize: '0.75rem', color: '#818cf8' }}>
           ⚙ Engine: <strong style={{ color: '#a5b4fc', textTransform: 'capitalize' }}>{credentials.engine || 'gemini'}</strong>
-          {!credentials.geminiKey && <div style={{ color: '#f87171', marginTop: '0.2rem' }}>⚠ No API key — go to Settings</div>}
+          {!(credentials.engine === 'groq' ? credentials.groqKey : credentials.engine === 'openrouter' ? credentials.openRouterKey : credentials.engine === 'openai' ? credentials.openaiKey : credentials.engine === 'claude' ? credentials.claudeKey : credentials.geminiKey) && <div style={{ color: '#f87171', marginTop: '0.2rem' }}>⚠ No API key — go to Settings</div>}
         </div>
 
         <div style={{ paddingTop: '1rem', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
