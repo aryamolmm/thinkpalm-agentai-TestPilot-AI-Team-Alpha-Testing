@@ -14,10 +14,9 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import dotenv from 'dotenv';
 dotenv.config();
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-const MEMORY_FILE = join(__dirname, '..', 'memory.json');
-const EXECUTIONS_FILE = join(__dirname, '..', 'executions.json');
+// Path helpers compatible with Vercel and local development
+const MEMORY_FILE = join(process.cwd(), 'memory.json');
+const EXECUTIONS_FILE = join(process.cwd(), 'executions.json');
 
 const app = express();
 const PORT = 3001;
@@ -2160,7 +2159,7 @@ Selectors Hint: ${sanitizedContext.substring(0, 500)}`
   }
 };
 
-app.use('/recordings', express.static(join(__dirname, '..', 'recordings')));
+app.use('/recordings', express.static(join(process.cwd(), 'recordings')));
 
 if (process.env.NODE_ENV !== 'production' || !process.env.VERCEL) {
   app.listen(PORT, () => {
