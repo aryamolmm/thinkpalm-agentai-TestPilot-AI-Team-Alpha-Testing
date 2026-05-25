@@ -1032,6 +1032,23 @@ app.post('/api/ai/generate', async (req, res) => {
   const engine = (req.body.engine || 'gemini').toLowerCase().trim();
   
   console.log(`[AI GENERATE] Type: ${type} | Engine: ${engine} | API Key Present: ${!!apiKey}`);
+
+  // === Early validation: resolve the effective key for the requested engine ===
+  const resolveKey = (eng) => {
+    switch (eng) {
+      case 'groq':        return apiKey || process.env.GROQ_API_KEY;
+      case 'openai':      return apiKey || process.env.OPENAI_API_KEY;
+      case 'claude':      return apiKey || process.env.CLAUDE_API_KEY;
+      case 'openrouter':  return apiKey || process.env.OPENROUTER_API_KEY;
+      default:            return process.env.GEMINI_API_KEY || (engine === 'gemini' ? apiKey : null);
+    }
+  };
+  const effectiveKey = resolveKey(engine);
+  if (!effectiveKey) {
+    return res.status(400).json({
+      error: `No API key configured for engine "${engine}". Please go to Settings and save your ${engine.toUpperCase()} API key, then try again.`
+    });
+  }
   
   const memoryContext = userMemory ? `\n[PREREQUISITES / GLOBAL CONTEXT]\n${userMemory}\n` : '';
   const frameworkContext = framework !== 'none' ? ` Use the ${framework} framework.` : '';
@@ -1093,8 +1110,8 @@ The script MUST be production-ready. Return ONLY the raw code block with no mark
     let text = '';
 
     const callGemini = async () => {
-      const geminiKey = process.env.GEMINI_API_KEY || (engine === 'gemini' ? apiKey : null);
-      if (!geminiKey) throw new Error('Gemini API Key is required');
+      const geminiKey = resolveKey('gemini');
+      if (!geminiKey) throw new Error('Gemini API Key is required. Please add your Gemini key in Settings.');
       const genAI = new GoogleGenerativeAI(geminiKey);
       const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro" });
       const result = await model.generateContent(prompt);
@@ -1103,9 +1120,9 @@ The script MUST be production-ready. Return ONLY the raw code block with no mark
 
     if (engine === 'groq') {
       try {
-        const groqKey = apiKey || process.env.GROQ_API_KEY;
+        const groqKey = resolveKey('groq');
         const response = await axios.post('https://api.groq.com/openai/v1/chat/completions', {
-          model: "llama-3.3-70b-versatile",
+          model: GROQ_MODEL,
           messages: [{ role: 'user', content: prompt }],
           temperature: 0.1
         }, {
@@ -1113,16 +1130,20 @@ The script MUST be production-ready. Return ONLY the raw code block with no mark
         });
         text = response.data.choices[0].message.content;
       } catch (groqErr) {
-        const isRateLimit = groqErr.response?.status === 429 || (groqErr.response?.data?.error?.message || '').toLowerCase().includes('rate limit') || (groqErr.response?.data?.error?.message || '').toLowerCase().includes('tokens per day');
+        const groqErrMsg = groqErr.response?.data?.error?.message || groqErr.message || 'Unknown Groq error';
+        const groqStatus = groqErr.response?.status;
+        const isRateLimit = groqStatus === 429 || groqErrMsg.toLowerCase().includes('rate limit') || groqErrMsg.toLowerCase().includes('tokens per day');
         if (isRateLimit) {
           console.warn('[Fallback] Groq rate limit hit — switching to Gemini automatically.');
           text = await callGemini();
+        } else if (groqStatus === 401 || groqStatus === 403) {
+          throw new Error(`Groq authentication failed (${groqStatus}): ${groqErrMsg}. Please check your Groq API key in Settings.`);
         } else {
-          throw groqErr;
+          throw new Error(`Groq API error (${groqStatus || 'network'}): ${groqErrMsg}`);
         }
       }
     } else if (engine === 'openai') {
-      const oaiKey = apiKey || process.env.OPENAI_API_KEY;
+      const oaiKey = resolveKey('openai');
       const oaiRes = await axios.post('https://api.openai.com/v1/chat/completions', {
         model: "gpt-4-turbo",
         messages: [{ role: 'user', content: prompt }],
@@ -1132,7 +1153,7 @@ The script MUST be production-ready. Return ONLY the raw code block with no mark
       });
       text = oaiRes.data.choices[0].message.content;
     } else if (engine === 'claude') {
-      const claudeKey = apiKey || process.env.CLAUDE_API_KEY;
+      const claudeKey = resolveKey('claude');
       const claudeRes = await axios.post('https://api.anthropic.com/v1/messages', {
         model: "claude-3-5-sonnet-20241022",
         max_tokens: 4000,
@@ -1144,7 +1165,8 @@ The script MUST be production-ready. Return ONLY the raw code block with no mark
       text = claudeRes.data.content[0].text;
     } else if (engine === 'openrouter') {
       try {
-        const orKey = apiKey || process.env.OPENROUTER_API_KEY;
+        const orKey = resolveKey('openrouter');
+        const refererUrl = req.headers.origin || req.headers.referer || 'https://testpilot-ai.vercel.app';
         console.log(`[OpenRouter] Calling model: deepseek/deepseek-chat for generation`);
         const orRes = await axios.post('https://openrouter.ai/api/v1/chat/completions', {
           model: "deepseek/deepseek-chat",
@@ -1154,7 +1176,7 @@ The script MUST be production-ready. Return ONLY the raw code block with no mark
           headers: { 
             'Authorization': `Bearer ${orKey}`, 
             'Content-Type': 'application/json', 
-            'HTTP-Referer': 'http://localhost:5173', 
+            'HTTP-Referer': refererUrl, 
             'X-Title': 'TestPilot AI' 
           }
         });
@@ -1174,9 +1196,24 @@ The script MUST be production-ready. Return ONLY the raw code block with no mark
         text = text.replace(/```[a-z]*/gi, '').replace(/```/g, '').trim();
         res.json({ script: text });
     } else {
-        const jsonMatch = text.match(/\[\s*\{[\s\S]*\}\s*\]/);
-        const jsonText = jsonMatch ? jsonMatch[0] : text.replace(/```json|```|json/g, '').trim();
-        res.json({ testCases: JSON.parse(jsonText.trim()) });
+        // Robust JSON extraction — try multiple patterns
+        let parsed = null;
+        const jsonMatch = text.match(/\[\s*\{[\s\S]*?\}\s*\]/);
+        const jsonText = jsonMatch ? jsonMatch[0] : text.replace(/```json|```|json/gi, '').trim();
+        try {
+          parsed = JSON.parse(jsonText);
+        } catch (parseErr) {
+          // Second attempt: extract first valid JSON array in the text
+          const secondMatch = text.match(/\[[\s\S]*\]/);
+          if (secondMatch) {
+            try { parsed = JSON.parse(secondMatch[0]); } catch {}
+          }
+          if (!parsed) {
+            console.error('[JSON PARSE ERROR] Could not parse AI response:', text.substring(0, 500));
+            throw new Error(`The AI returned an invalid format. Try regenerating. Raw start: ${text.substring(0, 120)}`);
+          }
+        }
+        res.json({ testCases: parsed });
     }
   } catch (error) {
     let errorMessage = error.message;
@@ -1192,8 +1229,26 @@ The script MUST be production-ready. Return ONLY the raw code block with no mark
 
 // [AGENT 3: REWORK AGENT]
 app.post('/api/ai/rework', async (req, res) => {
-  const { story, script, errorLog, apiKey, engine = 'gemini', userMemory = '', tool = 'playwright', language = 'typescript', framework = 'none' } = req.body;
+  const { story, script, errorLog, apiKey, userMemory = '', tool = 'playwright', language = 'typescript', framework = 'none' } = req.body;
+  const engine = (req.body.engine || 'gemini').toLowerCase().trim();
   
+  const resolveKey = (eng) => {
+    switch (eng) {
+      case 'groq':        return apiKey || process.env.GROQ_API_KEY;
+      case 'openai':      return apiKey || process.env.OPENAI_API_KEY;
+      case 'claude':      return apiKey || process.env.CLAUDE_API_KEY;
+      case 'openrouter':  return apiKey || process.env.OPENROUTER_API_KEY;
+      default:            return process.env.GEMINI_API_KEY || (engine === 'gemini' ? apiKey : null);
+    }
+  };
+
+  const effectiveKey = resolveKey(engine);
+  if (!effectiveKey) {
+    return res.status(400).json({
+      error: `No API key configured for engine "${engine}". Please go to Settings and save your ${engine.toUpperCase()} API key, then try again.`
+    });
+  }
+
   const memoryContext = userMemory ? `\n[PREREQUISITES / GLOBAL CONTEXT]\n${userMemory}\n` : '';
   const frameworkContext = framework !== 'none' ? ` Use the ${framework} framework.` : '';
 
@@ -1209,8 +1264,8 @@ app.post('/api/ai/rework', async (req, res) => {
     let text = '';
 
     const callGeminiRework = async () => {
-      const geminiKey = process.env.GEMINI_API_KEY || (engine === 'gemini' ? apiKey : null);
-      if (!geminiKey) throw new Error('Gemini API Key is required');
+      const geminiKey = resolveKey('gemini');
+      if (!geminiKey) throw new Error('Gemini API Key is required. Please add your Gemini key in Settings.');
       const genAI = new GoogleGenerativeAI(geminiKey);
       const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro" });
       const result = await model.generateContent(prompt);
@@ -1219,9 +1274,9 @@ app.post('/api/ai/rework', async (req, res) => {
 
     if (engine === 'groq') {
       try {
-        const groqKey = apiKey || process.env.GROQ_API_KEY;
+        const groqKey = resolveKey('groq');
         const groqRes = await axios.post('https://api.groq.com/openai/v1/chat/completions', {
-          model: "llama-3.3-70b-versatile",
+          model: GROQ_MODEL,
           messages: [{ role: 'user', content: prompt }],
           temperature: 0.1
         }, {
@@ -1229,16 +1284,20 @@ app.post('/api/ai/rework', async (req, res) => {
         });
         text = groqRes.data.choices[0].message.content;
       } catch (groqErr) {
-        const isRateLimit = groqErr.response?.status === 429 || (groqErr.response?.data?.error?.message || '').toLowerCase().includes('rate limit') || (groqErr.response?.data?.error?.message || '').toLowerCase().includes('tokens per day');
+        const groqErrMsg = groqErr.response?.data?.error?.message || groqErr.message || 'Unknown Groq error';
+        const groqStatus = groqErr.response?.status;
+        const isRateLimit = groqStatus === 429 || groqErrMsg.toLowerCase().includes('rate limit') || groqErrMsg.toLowerCase().includes('tokens per day');
         if (isRateLimit) {
           console.warn('[Fallback] Groq rate limit hit — switching to Gemini for rework.');
           text = await callGeminiRework();
+        } else if (groqStatus === 401 || groqStatus === 403) {
+          throw new Error(`Groq authentication failed (${groqStatus}): ${groqErrMsg}. Please check your Groq API key in Settings.`);
         } else {
-          throw groqErr;
+          throw new Error(`Groq API error (${groqStatus || 'network'}): ${groqErrMsg}`);
         }
       }
     } else if (engine === 'openai') {
-      const oaiKey = apiKey || process.env.OPENAI_API_KEY;
+      const oaiKey = resolveKey('openai');
       const oaiRes = await axios.post('https://api.openai.com/v1/chat/completions', {
         model: "gpt-4-turbo",
         messages: [{ role: 'user', content: prompt }],
@@ -1248,7 +1307,7 @@ app.post('/api/ai/rework', async (req, res) => {
       });
       text = oaiRes.data.choices[0].message.content;
     } else if (engine === 'claude') {
-      const claudeKey = apiKey || process.env.CLAUDE_API_KEY;
+      const claudeKey = resolveKey('claude');
       const claudeRes = await axios.post('https://api.anthropic.com/v1/messages', {
         model: "claude-3-5-sonnet-20241022",
         max_tokens: 4000,
@@ -1260,7 +1319,8 @@ app.post('/api/ai/rework', async (req, res) => {
       text = claudeRes.data.content[0].text;
     } else if (engine === 'openrouter') {
       try {
-        const orKey = apiKey || process.env.OPENROUTER_API_KEY;
+        const orKey = resolveKey('openrouter');
+        const refererUrl = req.headers.origin || req.headers.referer || 'https://testpilot-ai.vercel.app';
         console.log(`[OpenRouter] Calling model: deepseek/deepseek-chat for rework`);
         const orRes = await axios.post('https://openrouter.ai/api/v1/chat/completions', {
           model: "deepseek/deepseek-chat",
@@ -1270,7 +1330,7 @@ app.post('/api/ai/rework', async (req, res) => {
           headers: { 
             'Authorization': `Bearer ${orKey}`, 
             'Content-Type': 'application/json', 
-            'HTTP-Referer': 'http://localhost:5173', 
+            'HTTP-Referer': refererUrl, 
             'X-Title': 'TestPilot AI' 
           }
         });
