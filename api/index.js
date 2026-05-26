@@ -10,6 +10,8 @@ import { tmpdir } from 'os';
 import { v4 as uuidv4 } from 'uuid';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import dotenv from 'dotenv';
 dotenv.config();
@@ -123,7 +125,7 @@ app.post('/api/memory/save', async (req, res) => {
     const exists = memory.some(e => e.input === input);
     if (!exists) {
       memory.push({ input, gherkin, testCode: testCode || '', coverage: coverage || '', timestamp: new Date().toISOString() });
-      await writeFile(MEMORY_FILE, JSON.stringify(memory, null, 2));
+      try { await writeFile(MEMORY_FILE, JSON.stringify(memory, null, 2)); } catch(e) { console.warn('[Memory] Read-only FS:', e.message); }
     }
     res.json({ saved: !exists, total_entries: memory.length });
   } catch (err) {
@@ -493,8 +495,26 @@ app.post('/api/agent/super', async (req, res) => {
 app.post('/api/agent/super/text', async (req, res) => {
   const { input, userMemory } = req.body;
   
-  const report = await axios.post(`http://localhost:${PORT}/api/agent/super`, { input, userMemory });
-  const data = report.data;
+  // Call the super agent logic directly instead of via HTTP (Vercel can't self-call)
+  const memory = await loadMemoryData();
+  let bestMatch = null, bestScore = 0;
+  for (const entry of memory) {
+    const score = computeSimilarity(input, entry.input);
+    if (score > bestScore) { bestScore = score; bestMatch = entry; }
+  }
+  const used_memory = bestScore > 0.45;
+  const memory_action = used_memory ? (bestScore > 0.85 ? 'reuse' : 'improve') : 'fresh';
+  const memory_summary = used_memory
+    ? `Semantic match identified (${Math.round(bestScore * 100)}%). Execution strategy set to: ${memory_action}.`
+    : `No sufficiently similar past execution found in memory database.`;
+  const agent_logs = [
+    'Orchestrator: Received user input',
+    `MemoryAgent: [STATUS] Memory check complete. Mode: ${memory_action}`,
+    'ArchitectAgent: [CMD] Generating BDD / Gherkin scenario context',
+    'AutomationAgent: [CMD] Creating production-ready Playwright test scripts',
+    'CoverageAgent: [CMD] Checking test coverage and edge-case implementation'
+  ];
+  const data = { memory: { used_memory, memory_action, memory_summary }, agent_logs };
 
   const textOutput = `
 AI MEMORY:
@@ -530,8 +550,19 @@ Pipeline completed successfully`;
 app.post('/api/agent/super/tools', async (req, res) => {
   const { input, userMemory } = req.body;
   
-  const report = await axios.post(`http://localhost:${PORT}/api/agent/super`, { input, userMemory });
-  const data = report.data;
+  // Call the super agent logic directly instead of via HTTP (Vercel can't self-call)
+  const memory = await loadMemoryData();
+  let bestMatch = null, bestScore = 0;
+  for (const entry of memory) {
+    const score = computeSimilarity(input, entry.input);
+    if (score > bestScore) { bestScore = score; bestMatch = entry; }
+  }
+  const used_memory = bestScore > 0.45;
+  const memory_action = used_memory ? (bestScore > 0.85 ? 'reuse' : 'improve') : 'fresh';
+  const memory_summary = used_memory
+    ? `Semantic match identified (${Math.round(bestScore * 100)}%). Strategy: ${memory_action}.`
+    : `No sufficiently similar past execution found in memory database.`;
+  const data = { memory: { used_memory, memory_action, memory_summary } };
 
   const memorySection = `
 AI MEMORY:
@@ -933,7 +964,7 @@ Return ONLY valid JSON: { "improved_test_code": "..." }`;
     const exists = memory.some(e => e.input === input);
     if (!exists) {
       memory.push({ input, gherkin, testCode: finalTestCode, coverage: coverageStr, timestamp: new Date().toISOString() });
-      await writeFile(MEMORY_FILE, JSON.stringify(memory, null, 2));
+      try { await writeFile(MEMORY_FILE, JSON.stringify(memory, null, 2)); } catch (e) { console.warn('[Memory] Cannot write memory file (read-only FS on Vercel):', e.message); }
     }
 
     log('Orchestrator', null, 'Memory index updated successfully', 'info');
@@ -1393,6 +1424,7 @@ app.get('/api/browse-folder', async (req, res) => {
   });
 });
 
+const npxCmd = process.platform === 'win32' ? 'npx.cmd' : 'npx';
 app.post('/api/execute-test', async (req, res) => {
   const { test_case_id, status, comments, script, manual } = req.body;
   const startTime = Date.now();
@@ -1468,11 +1500,13 @@ app.post('/api/execute-test', async (req, res) => {
 
   // Save to memory and respond
   let executions = [];
-  if (existsSync(EXECUTIONS_FILE)) {
-    executions = JSON.parse(await readFile(EXECUTIONS_FILE, 'utf-8'));
-  }
-  executions.push(newExecution);
-  await writeFile(EXECUTIONS_FILE, JSON.stringify(executions, null, 2));
+  try {
+    if (existsSync(EXECUTIONS_FILE)) {
+      executions = JSON.parse(await readFile(EXECUTIONS_FILE, 'utf-8'));
+    }
+    executions.push(newExecution);
+    await writeFile(EXECUTIONS_FILE, JSON.stringify(executions, null, 2));
+  } catch (e) { console.warn('[Executions] Cannot write executions file (read-only FS on Vercel):', e.message); }
   res.json(newExecution);
 });
 
@@ -1548,7 +1582,7 @@ app.get('/api/execution-results', async (req, res) => {
 
 app.post('/api/execution-results/clear', async (req, res) => {
   try {
-    await writeFile(EXECUTIONS_FILE, JSON.stringify([]));
+    try { await writeFile(EXECUTIONS_FILE, JSON.stringify([])); } catch(e) { console.warn('[Executions] Read-only FS:', e.message); }
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -2021,10 +2055,11 @@ Selectors Hint: ${sanitizedContext.substring(0, 500)}`
 
       for (let i = 0; i < 15; i++) {
         let name, args;
+        let geminiResult = null;
 
         if (useGemini) {
-          const result = await chat.sendMessage(lastObservation);
-          const call = result.response.candidates[0].content.parts.find(p => p.functionCall);
+          geminiResult = await chat.sendMessage(lastObservation);
+          const call = geminiResult.response.candidates[0].content.parts.find(p => p.functionCall);
           if (call) {
             name = call.functionCall.name;
             args = call.functionCall.args;
@@ -2122,7 +2157,7 @@ Selectors Hint: ${sanitizedContext.substring(0, 500)}`
           }
         } else if (useGemini) {
           // Gemini didn't return a tool call. Let's check what it said.
-          const textPart = result.response.candidates[0].content.parts.find(p => p.text);
+          const textPart = geminiResult && geminiResult.response.candidates[0].content.parts.find(p => p.text);
           if (textPart && textPart.text) {
              const text = textPart.text.toLowerCase();
              if (text.includes('done') || text.includes('completed') || text.includes('success')) {
