@@ -37,6 +37,30 @@ const ExecutionPage = ({ story, credentials }) => {
     setExecutionServerUrl(val);
     localStorage.setItem('testpilot_execution_server_url', val);
   };
+
+  const handleTargetUrlChange = (val) => {
+    setTargetUrl(val);
+    if (story?.id) {
+      const currentEnv = JSON.parse(localStorage.getItem(`testpilot_env_${story.id}`) || '{}');
+      localStorage.setItem(`testpilot_env_${story.id}`, JSON.stringify({ ...currentEnv, url: val }));
+    }
+  };
+
+  const handleTargetUserChange = (val) => {
+    setTargetUser(val);
+    if (story?.id) {
+      const currentEnv = JSON.parse(localStorage.getItem(`testpilot_env_${story.id}`) || '{}');
+      localStorage.setItem(`testpilot_env_${story.id}`, JSON.stringify({ ...currentEnv, user: val }));
+    }
+  };
+
+  const handleTargetPassChange = (val) => {
+    setTargetPass(val);
+    if (story?.id) {
+      const currentEnv = JSON.parse(localStorage.getItem(`testpilot_env_${story.id}`) || '{}');
+      localStorage.setItem(`testpilot_env_${story.id}`, JSON.stringify({ ...currentEnv, pass: val }));
+    }
+  };
   
   const eventSourceRef = useRef(null);
   const logEndRef = useRef(null);
@@ -58,6 +82,46 @@ const ExecutionPage = ({ story, credentials }) => {
 
       const storedScript = localStorage.getItem(`testpilot_script_${story.id}`);
       if (storedScript) setContextCode(storedScript);
+
+      // Load saved environment config for this story
+      const savedEnv = localStorage.getItem(`testpilot_env_${story.id}`);
+      if (savedEnv) {
+        try {
+          const { url, user, pass } = JSON.parse(savedEnv);
+          setTargetUrl(url || '');
+          setTargetUser(user || '');
+          setTargetPass(pass || '');
+        } catch (e) {}
+      } else {
+        // Fallback: Smart URL auto-detection from story description or BDD steps
+        let detectedUrl = '';
+        const desc = story.description || story.Description || '';
+        const stepsText = story.Steps || '';
+        
+        // Helper to extract non-placeholder URL
+        const extractUrl = (text, ignorePlaceholders = false) => {
+          const regex = /(?:https?:\/\/[^\s"']+|www\.[^\s"']+|[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}(?:\/[^\s"']*)?)/gi;
+          const matches = text.match(regex) || [];
+          const filtered = ignorePlaceholders 
+              ? matches.filter(u => !u.includes('example.com') && !u.includes('localhost'))
+              : matches;
+          if (filtered.length > 0) {
+              const best = filtered.find(u => u.startsWith('http')) || filtered[0];
+              return best.startsWith('http') ? best : 'https://' + best;
+          }
+          return null;
+        };
+
+        if (desc.toLowerCase().includes('swag labs') || desc.toLowerCase().includes('saucedemo')) {
+          detectedUrl = 'https://www.saucedemo.com';
+        } else {
+          detectedUrl = extractUrl(stepsText, true) || extractUrl(desc, true) || extractUrl(stepsText, false) || extractUrl(desc, false) || '';
+        }
+
+        setTargetUrl(detectedUrl);
+        setTargetUser('');
+        setTargetPass('');
+      }
     }
   }, [story]);
 
@@ -459,7 +523,7 @@ const ExecutionPage = ({ story, credentials }) => {
                       type="text" 
                       placeholder="Application URL (e.g., http://192.168.1.1/login)" 
                       value={targetUrl}
-                      onChange={(e) => setTargetUrl(e.target.value)}
+                      onChange={(e) => handleTargetUrlChange(e.target.value)}
                       style={{ 
                         width: '100%', background: 'rgba(0,0,0,0.2)', 
                         border: '1px solid rgba(255,255,255,0.07)', color: '#f1f5f9', 
@@ -475,7 +539,7 @@ const ExecutionPage = ({ story, credentials }) => {
                         type="text" 
                         placeholder="Username" 
                         value={targetUser}
-                        onChange={(e) => setTargetUser(e.target.value)}
+                        onChange={(e) => handleTargetUserChange(e.target.value)}
                         style={{ 
                           width: '100%', background: 'rgba(0,0,0,0.2)', 
                           border: '1px solid rgba(255,255,255,0.07)', color: '#f1f5f9', 
@@ -490,7 +554,7 @@ const ExecutionPage = ({ story, credentials }) => {
                         type="password" 
                         placeholder="Password" 
                         value={targetPass}
-                        onChange={(e) => setTargetPass(e.target.value)}
+                        onChange={(e) => handleTargetPassChange(e.target.value)}
                         style={{ 
                           width: '100%', background: 'rgba(0,0,0,0.2)', 
                           border: '1px solid rgba(255,255,255,0.07)', color: '#f1f5f9', 

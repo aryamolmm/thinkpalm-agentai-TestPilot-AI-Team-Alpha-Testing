@@ -1967,15 +1967,23 @@ const runAgentExecution = async (executionId, tcId, steps, headless, engine, con
 
   try {
     // ── Pre-Navigation (Fast Start) ──
-    const extractUrl = (text) => {
-        const explicit = text.match(/(?:url|link|website|site|open|goto|go to)\s*[:=]?\s*(https?:\/\/[^\s"']+|www\.[^\s"']+|[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}(?:\/[^\s"']*)?)/i);
-        if (explicit) return explicit[1];
-        const implicit = text.match(/https?:\/\/[^\s"']+/i);
-        if (implicit) return implicit[0];
+    const extractUrl = (text, ignorePlaceholders = false) => {
+        const regex = /(?:https?:\/\/[^\s"']+|www\.[^\s"']+|[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}(?:\/[^\s"']*)?)/gi;
+        const matches = text.match(regex) || [];
+        const filtered = ignorePlaceholders 
+            ? matches.filter(u => !u.includes('example.com') && !u.includes('localhost'))
+            : matches;
+        if (filtered.length > 0) {
+            return filtered.find(u => u.startsWith('http')) || filtered[0];
+        }
         return null;
     };
     
-    let url = envConfig.url || extractUrl(stepsText) || extractUrl(allText);
+    let url = envConfig.url || 
+              extractUrl(stepsText, true) || 
+              extractUrl(allText, true) || 
+              extractUrl(stepsText, false) || 
+              extractUrl(allText, false);
     let tools;
     
     if (url) {
