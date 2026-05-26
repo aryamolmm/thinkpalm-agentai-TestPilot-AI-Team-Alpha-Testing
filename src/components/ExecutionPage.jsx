@@ -269,10 +269,10 @@ const ExecutionPage = ({ story, credentials }) => {
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', height: 'calc(100vh - 140px)', overflow: 'hidden' }}>
       
       {/* Top Warning Banner */}
-      {isVercel && showWarning && (
+      {isVercel && (
         <div style={{ 
           background: 'linear-gradient(135deg, rgba(245,158,11,0.1), rgba(234,88,12,0.08))', 
-          border: '1px solid rgba(245,158,11,0.25)', 
+          border: '1px solid rgba(245,158,11,0.3)', 
           borderRadius: '10px', 
           padding: '0.65rem 1.2rem', 
           color: '#fef3c7',
@@ -284,16 +284,15 @@ const ExecutionPage = ({ story, credentials }) => {
           flexShrink: 0
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', flex: 1 }}>
-            <span style={{ fontSize: '1rem' }}>⚠️</span>
+            <span style={{ fontSize: '1rem' }}>🚫</span>
             <span>
-              <strong style={{ color: '#fbbf24' }}>Local Execution Recommended: </strong>
-              Headless Chrome cannot run on Vercel. Run locally with <code style={{ background: 'rgba(0,0,0,0.3)', padding: '1px 5px', borderRadius: '3px' }}>npm run server</code>
+              <strong style={{ color: '#fbbf24' }}>Browser Execution Unavailable on Vercel: </strong>
+              Headless Chrome cannot run in serverless containers. Please run locally:
+              <code style={{ background: 'rgba(0,0,0,0.35)', padding: '1px 6px', borderRadius: '3px', marginLeft: '4px' }}>npm run server</code>
+              {' '}then open{' '}
+              <code style={{ background: 'rgba(0,0,0,0.35)', padding: '1px 6px', borderRadius: '3px' }}>http://localhost:5173</code>
             </span>
           </div>
-          <button 
-            onClick={() => setShowWarning(false)}
-            style={{ background: 'transparent', border: 'none', color: '#fbbf24', cursor: 'pointer', fontSize: '1rem', padding: '0.2rem 0.4rem', borderRadius: '4px', flexShrink: 0 }}
-          >✕</button>
         </div>
       )}
 
@@ -549,28 +548,52 @@ const ExecutionPage = ({ story, credentials }) => {
                       {index + 1}
                     </div>
                     
-                    <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
                       {step.isEditing ? (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', width: '100%' }}>
                           <input 
                             autoFocus
                             style={{ 
-                              width: '100%', background: 'transparent', border: 'none', 
-                              borderBottom: '1px solid #818cf8', color: '#f8fafc', 
-                              outline: 'none', padding: '2px 0', fontSize: '0.85rem'
+                              flex: 1,
+                              minWidth: 0,
+                              background: 'rgba(99,102,241,0.08)', 
+                              border: 'none',
+                              borderBottom: '2px solid #818cf8', 
+                              color: '#f8fafc', 
+                              outline: 'none', 
+                              padding: '4px 6px', 
+                              fontSize: '0.85rem',
+                              borderRadius: '4px 4px 0 0'
                             }}
                             value={step.text}
                             onChange={(e) => updateStepText(step.id, e.target.value)}
                             onKeyDown={(e) => e.key === 'Enter' && toggleEdit(step.id)}
                           />
-                          <button onClick={() => toggleEdit(step.id)} style={{ background: 'transparent', border: 'none', color: '#10b981', cursor: 'pointer', flexShrink: 0 }}>
+                          <button 
+                            onClick={() => toggleEdit(step.id)} 
+                            title="Save (Enter)"
+                            style={{ 
+                              background: 'rgba(16,185,129,0.15)', 
+                              border: '1px solid rgba(16,185,129,0.3)', 
+                              color: '#10b981', 
+                              cursor: 'pointer', 
+                              flexShrink: 0,
+                              width: '28px',
+                              height: '28px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              borderRadius: '6px'
+                            }}
+                          >
                             <Save size={13} />
                           </button>
                         </div>
                       ) : (
                         <div 
-                          onClick={() => toggleEdit(step.id)}
-                          style={{ color: '#cbd5e1', cursor: 'text', fontSize: '0.85rem', wordBreak: 'break-word', lineHeight: '1.4' }}
+                          onClick={() => !isExecuting && toggleEdit(step.id)}
+                          title={isExecuting ? '' : 'Click to edit'}
+                          style={{ color: '#cbd5e1', cursor: isExecuting ? 'default' : 'text', fontSize: '0.85rem', wordBreak: 'break-word', lineHeight: '1.4' }}
                         >
                           {step.text}
                         </div>
@@ -650,34 +673,56 @@ const ExecutionPage = ({ story, credentials }) => {
             </div>
 
             {/* Run/Stop Button */}
-            <button 
-              onClick={() => isExecuting ? stopExecution() : startAgentExecution(selectedCaseId || null, null)} 
-              style={{ 
+            {isVercel ? (
+              <div style={{
                 width: '100%',
                 padding: '0.75rem',
                 borderRadius: '11px',
-                border: `1px solid ${isExecuting ? '#ef4444' : '#10b981'}`,
-                background: isExecuting 
-                  ? 'linear-gradient(135deg, rgba(239,68,68,0.12), rgba(220,38,38,0.08))' 
-                  : 'linear-gradient(135deg, rgba(16,185,129,0.15), rgba(5,150,105,0.1))',
-                color: isExecuting ? '#ef4444' : '#10b981',
-                fontSize: '0.9rem',
-                fontWeight: 600,
-                cursor: 'pointer',
+                border: '1px solid rgba(245,158,11,0.3)',
+                background: 'rgba(245,158,11,0.06)',
+                color: '#92400e',
+                fontSize: '0.85rem',
+                fontWeight: 500,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 gap: '0.5rem',
-                transition: 'all 0.2s',
-                letterSpacing: '0.02em'
-              }}
-            >
-              {isExecuting ? <Square size={16} /> : <Bot size={16} />}
-              {isExecuting 
-                ? `Stop Agent ${executionQueue.length > 0 ? `(${executionQueue.length} queued)` : ''}` 
-                : 'Run Selected Test Case'
-              }
-            </button>
+                cursor: 'not-allowed',
+                letterSpacing: '0.01em'
+              }}>
+                <span style={{ fontSize: '1rem' }}>🚫</span>
+                Execution requires local server
+              </div>
+            ) : (
+              <button 
+                onClick={() => isExecuting ? stopExecution() : startAgentExecution(selectedCaseId || null, null)} 
+                style={{ 
+                  width: '100%',
+                  padding: '0.75rem',
+                  borderRadius: '11px',
+                  border: `1px solid ${isExecuting ? '#ef4444' : '#10b981'}`,
+                  background: isExecuting 
+                    ? 'linear-gradient(135deg, rgba(239,68,68,0.12), rgba(220,38,38,0.08))' 
+                    : 'linear-gradient(135deg, rgba(16,185,129,0.15), rgba(5,150,105,0.1))',
+                  color: isExecuting ? '#ef4444' : '#10b981',
+                  fontSize: '0.9rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '0.5rem',
+                  transition: 'all 0.2s',
+                  letterSpacing: '0.02em'
+                }}
+              >
+                {isExecuting ? <Square size={16} /> : <Bot size={16} />}
+                {isExecuting 
+                  ? `Stop Agent ${executionQueue.length > 0 ? `(${executionQueue.length} queued)` : ''}` 
+                  : 'Run Selected Test Case'
+                }
+              </button>
+            )}
           </div>
         </div>
 
