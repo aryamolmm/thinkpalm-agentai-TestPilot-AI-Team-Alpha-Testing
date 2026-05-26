@@ -1154,7 +1154,8 @@ The script MUST be production-ready. Return ONLY the raw code block with no mark
         const response = await axios.post('https://api.groq.com/openai/v1/chat/completions', {
           model: GROQ_MODEL,
           messages: [{ role: 'user', content: prompt }],
-          temperature: 0.1
+          temperature: 0.1,
+          max_tokens: 4000
         }, {
           headers: { 'Authorization': `Bearer ${groqKey}`, 'Content-Type': 'application/json' }
         });
@@ -1177,7 +1178,8 @@ The script MUST be production-ready. Return ONLY the raw code block with no mark
       const oaiRes = await axios.post('https://api.openai.com/v1/chat/completions', {
         model: "gpt-4-turbo",
         messages: [{ role: 'user', content: prompt }],
-        temperature: 0.1
+        temperature: 0.1,
+        max_tokens: 4000
       }, {
         headers: { 'Authorization': `Bearer ${oaiKey}`, 'Content-Type': 'application/json' }
       });
@@ -1201,7 +1203,8 @@ The script MUST be production-ready. Return ONLY the raw code block with no mark
         const orRes = await axios.post('https://openrouter.ai/api/v1/chat/completions', {
           model: "deepseek/deepseek-chat",
           messages: [{ role: 'user', content: prompt }],
-          temperature: 0.1
+          temperature: 0.1,
+          max_tokens: 4000
         }, {
           headers: { 
             'Authorization': `Bearer ${orKey}`, 
@@ -1226,20 +1229,50 @@ The script MUST be production-ready. Return ONLY the raw code block with no mark
         text = text.replace(/```[a-z]*/gi, '').replace(/```/g, '').trim();
         res.json({ script: text });
     } else {
-        // Robust JSON extraction — try multiple patterns
+        // Robust JSON extraction
         let parsed = null;
-        const jsonMatch = text.match(/\[\s*\{[\s\S]*?\}\s*\]/);
-        const jsonText = jsonMatch ? jsonMatch[0] : text.replace(/```json|```|json/gi, '').trim();
-        try {
-          parsed = JSON.parse(jsonText);
-        } catch (parseErr) {
-          // Second attempt: extract first valid JSON array in the text
-          const secondMatch = text.match(/\[[\s\S]*\]/);
-          if (secondMatch) {
-            try { parsed = JSON.parse(secondMatch[0]); } catch {}
+        let cleanedText = text.trim();
+        
+        // Strip markdown code block wrappers if present
+        if (cleanedText.startsWith('```')) {
+          cleanedText = cleanedText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+        }
+
+        // Find first '[' and last ']' to extract JSON array
+        const firstBracket = cleanedText.indexOf('[');
+        const lastBracket = cleanedText.lastIndexOf(']');
+        
+        if (firstBracket !== -1 && lastBracket !== -1 && lastBracket > firstBracket) {
+          const jsonSub = cleanedText.substring(firstBracket, lastBracket + 1);
+          try {
+            parsed = JSON.parse(jsonSub);
+          } catch (e) {
+            console.warn('[Parser] Standard bracket array extract parse failed:', e.message);
           }
-          if (!parsed) {
-            console.error('[JSON PARSE ERROR] Could not parse AI response:', text.substring(0, 500));
+        }
+
+        // Fallback: match any list-like pattern or first brace matches
+        if (!parsed) {
+          try {
+            const firstBrace = cleanedText.indexOf('{');
+            const lastBrace = cleanedText.lastIndexOf('}');
+            if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+              const braceStr = cleanedText.substring(firstBrace, lastBrace + 1);
+              parsed = JSON.parse('[' + braceStr + ']'); // Wrap single object into array if needed
+            }
+          } catch (e) {
+            console.warn('[Parser] Brace extract fallback failed:', e.message);
+          }
+        }
+
+        // Ultimate fallback: original regex matching
+        if (!parsed) {
+          const jsonMatch = text.match(/\[\s*\{[\s\S]*\}\s*\]/); // greedy match of everything inside [ ... ]
+          const jsonText = jsonMatch ? jsonMatch[0] : text.replace(/```json|```|json/gi, '').trim();
+          try {
+            parsed = JSON.parse(jsonText);
+          } catch (parseErr) {
+            console.error('[JSON PARSE ERROR] All parsing strategies failed:', text.substring(0, 500));
             throw new Error(`The AI returned an invalid format. Try regenerating. Raw start: ${text.substring(0, 120)}`);
           }
         }
