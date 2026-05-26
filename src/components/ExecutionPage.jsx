@@ -24,6 +24,7 @@ const ExecutionPage = ({ story, credentials }) => {
   const [targetUrl, setTargetUrl] = useState('');
   const [targetUser, setTargetUser] = useState('');
   const [targetPass, setTargetPass] = useState('');
+  const [showWarning, setShowWarning] = useState(true);
   
   const eventSourceRef = useRef(null);
   const logEndRef = useRef(null);
@@ -281,28 +282,51 @@ const ExecutionPage = ({ story, credentials }) => {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', height: 'calc(100vh - 140px)' }}>
-      {isVercel && (
+      {isVercel && showWarning && (
         <div className="glass-card animate-fade-in" style={{ 
-          background: 'rgba(245, 158, 11, 0.08)', 
-          border: '1px solid rgba(245, 158, 11, 0.25)', 
+          background: 'rgba(245, 158, 11, 0.07)', 
+          border: '1px solid rgba(245, 158, 11, 0.2)', 
           borderRadius: '12px', 
-          padding: '1rem 1.5rem', 
+          padding: '0.6rem 1.2rem', 
           color: '#fef3c7',
-          fontSize: '0.88rem',
+          fontSize: '0.85rem',
           display: 'flex',
           alignItems: 'center',
+          justifyContent: 'space-between',
           gap: '1rem',
           boxShadow: '0 4px 20px rgba(0, 0, 0, 0.2)'
         }}>
-          <span style={{ fontSize: '1.4rem' }}>⚠️</span>
-          <div style={{ lineHeight: '1.5' }}>
-            <strong style={{ color: '#fbbf24', fontSize: '0.92rem' }}>Local Execution Recommended:</strong> Live browser-based test execution is not supported on Vercel's serverless cloud because headless Chrome processes cannot run in serverless containers. To execute live AI agent sequences, please run the project locally (<code style={{ background: 'rgba(0,0,0,0.3)', padding: '2px 6px', borderRadius: '4px', fontFamily: 'monospace' }}>http://localhost:5173</code>) with the local backend running (<code style={{ background: 'rgba(0,0,0,0.3)', padding: '2px 6px', borderRadius: '4px', fontFamily: 'monospace' }}>npm run server</code>).
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', flex: 1 }}>
+            <span style={{ fontSize: '1.2rem' }}>⚠️</span>
+            <div style={{ lineHeight: '1.4' }}>
+              <strong style={{ color: '#fbbf24', fontSize: '0.9rem' }}>Local Execution Recommended:</strong> Live browser-based test execution is not supported on Vercel's serverless cloud because headless Chrome processes cannot run in serverless containers. To execute live AI agent sequences, please run the project locally (<code style={{ background: 'rgba(0,0,0,0.3)', padding: '2px 6px', borderRadius: '4px', fontFamily: 'monospace' }}>http://localhost:5173</code>) with the local backend running (<code style={{ background: 'rgba(0,0,0,0.3)', padding: '2px 6px', borderRadius: '4px', fontFamily: 'monospace' }}>npm run server</code>).
+            </div>
           </div>
+          <button 
+            onClick={() => setShowWarning(false)}
+            style={{ 
+              background: 'transparent', 
+              border: 'none', 
+              color: '#fbbf24', 
+              cursor: 'pointer', 
+              fontSize: '1rem', 
+              fontWeight: 'bold',
+              padding: '0.2rem 0.5rem',
+              borderRadius: '4px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = 'rgba(245, 158, 11, 0.15)'}
+            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+          >
+            ✕
+          </button>
         </div>
       )}
       <div style={{ display: 'grid', gridTemplateColumns: '380px 1fr', gap: '1.5rem', flex: 1, minHeight: 0 }}>
         {/* LEFT: STEP EDITOR */}
-        <div style={{ ...glassStyle, display: 'flex', flexDirection: 'column', gap: '1rem', overflowY: 'auto', minWidth: '380px' }}>
+        <div style={{ ...glassStyle, display: 'flex', flexDirection: 'column', gap: '1rem', overflowY: 'auto', minWidth: '380px', height: '100%', maxHeight: '100%' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
           <div>
             <h3 style={{ margin: 0, color: '#f8fafc', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -541,6 +565,28 @@ const ExecutionPage = ({ story, credentials }) => {
         @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
         .spin-icon { animation: spin 2s linear infinite; }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        
+        /* Custom sleek scrollbars for a premium dark mode aesthetic */
+        * {
+          scrollbar-width: thin;
+          scrollbar-color: rgba(99, 102, 241, 0.25) rgba(255, 255, 255, 0.02);
+        }
+        ::-webkit-scrollbar {
+          width: 5px;
+          height: 5px;
+        }
+        ::-webkit-scrollbar-track {
+          background: rgba(255, 255, 255, 0.01);
+          border-radius: 8px;
+        }
+        ::-webkit-scrollbar-thumb {
+          background: rgba(99, 102, 241, 0.25);
+          border-radius: 8px;
+          transition: background 0.2s;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+          background: rgba(99, 102, 241, 0.45);
+        }
       `}</style>
       </div>
     </div>
