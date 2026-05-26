@@ -3,7 +3,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Bot, Play, Square, Terminal, CheckCircle2, XCircle, 
   Loader2, Image as ImageIcon, Settings, Eye, EyeOff,
-  Plus, Trash2, Edit3, Save, ChevronRight, FileText, Code
+  Plus, Trash2, Edit3, Save, ChevronRight, FileText, Code,
+  ChevronDown, ChevronUp, Globe, User, Lock, Zap
 } from 'lucide-react';
 import axios from 'axios';
 import { API_URLS } from '../services/api';
@@ -38,7 +39,6 @@ const ExecutionPage = ({ story, credentials }) => {
       if (storedCases) {
         const parsed = JSON.parse(storedCases);
         setGeneratedCases(parsed);
-        // Default to first case if available
         if (parsed.length > 0) {
             handleCaseSelect(parsed[0].TC_ID, parsed);
         }
@@ -61,14 +61,11 @@ const ExecutionPage = ({ story, credentials }) => {
     const tc = sourceCases.find(c => c.TC_ID === caseId);
     if (tc) {
         let uiSteps = [];
-        
-        // Only show Precondition (Login, etc) in the UI
         if (tc.Precondition || tc.Preconditions) {
             uiSteps.push(`PRECONDITION: ${tc.Precondition || tc.Preconditions}`);
         } else {
             uiSteps.push('No preconditions defined.');
         }
-
         setSteps(uiSteps.map((text, id) => ({ id, text, isEditing: false })));
     }
   };
@@ -98,7 +95,6 @@ const ExecutionPage = ({ story, credentials }) => {
       isTransitioningRef.current = true;
       const nextTcId = executionQueue[0];
       
-      // Find the case and extract steps including preconditions
       const tc = generatedCases.find(c => c.TC_ID === nextTcId);
       if (tc) {
         setRunningTcId(nextTcId);
@@ -115,13 +111,13 @@ const ExecutionPage = ({ story, credentials }) => {
             .map(s => s.trim());
         allSteps = [...allSteps, ...parsedSteps];
         
-        handleCaseSelect(nextTcId); // Update UI
+        handleCaseSelect(nextTcId);
         
         setIsExecuting(true);
         setTimeout(() => {
            startAgentExecution(nextTcId, allSteps);
            isTransitioningRef.current = false;
-        }, 1000); // 1s buffer for browser cleanup
+        }, 1000);
       } else {
         setExecutionQueue(prev => prev.slice(1));
         isTransitioningRef.current = false;
@@ -148,20 +144,16 @@ const ExecutionPage = ({ story, credentials }) => {
       const tc = generatedCases.find(c => c.TC_ID === activeTcId);
       
       let finalSteps = [];
-      
-      // 1. Take steps from UI (Preconditions/Modified steps)
       const uiSteps = steps.map(s => s.text);
       
       if (stepsOverride) {
           finalSteps = stepsOverride;
       } else if (tc) {
-          // Merge UI steps with BDD steps
           const rawBdd = tc.Gherkin || tc.Steps || tc.Scenario || '';
           const bddSteps = rawBdd.split('\n')
               .filter(s => s.trim())
               .filter(s => !s.trim().toLowerCase().startsWith('scenario:'))
               .map(s => s.trim());
-          
           finalSteps = [...uiSteps, ...bddSteps];
       } else {
           finalSteps = uiSteps;
@@ -238,7 +230,6 @@ const ExecutionPage = ({ story, credentials }) => {
         addLog(`🏁 Execution Finished: ${data.status} ${data.error ? '(' + data.error + ')' : ''}`, data.status === 'Success' ? 'success' : 'error');
         eventSourceRef.current?.close();
         
-        // Save result to report
         axios.post(API_URLS.EXECUTE_TEST, {
           test_case_id: tcId,
           status: data.status === 'Success' ? 'Pass' : 'Fail',
@@ -263,14 +254,6 @@ const ExecutionPage = ({ story, credentials }) => {
     addLog('🛑 Execution stopped by user', 'warn');
   };
 
-  const glassStyle = {
-    background: 'rgba(15, 23, 42, 0.6)',
-    backdropFilter: 'blur(12px)',
-    borderRadius: '16px',
-    border: '1px solid rgba(255, 255, 255, 0.05)',
-    padding: '1.5rem',
-  };
-
   const logColors = {
     info: '#818cf8',
     tool: '#fbbf24',
@@ -283,90 +266,144 @@ const ExecutionPage = ({ story, credentials }) => {
   const isVercel = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', height: 'calc(100vh - 140px)' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', height: 'calc(100vh - 140px)', overflow: 'hidden' }}>
+      
+      {/* Top Warning Banner */}
       {isVercel && showWarning && (
-        <div className="glass-card animate-fade-in" style={{ 
-          background: 'rgba(245, 158, 11, 0.07)', 
-          border: '1px solid rgba(245, 158, 11, 0.2)', 
-          borderRadius: '12px', 
-          padding: '0.6rem 1.2rem', 
+        <div style={{ 
+          background: 'linear-gradient(135deg, rgba(245,158,11,0.1), rgba(234,88,12,0.08))', 
+          border: '1px solid rgba(245,158,11,0.25)', 
+          borderRadius: '10px', 
+          padding: '0.65rem 1.2rem', 
           color: '#fef3c7',
-          fontSize: '0.85rem',
+          fontSize: '0.82rem',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
           gap: '1rem',
-          boxShadow: '0 4px 20px rgba(0, 0, 0, 0.2)'
+          flexShrink: 0
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', flex: 1 }}>
-            <span style={{ fontSize: '1.2rem' }}>⚠️</span>
-            <div style={{ lineHeight: '1.4' }}>
-              <strong style={{ color: '#fbbf24', fontSize: '0.9rem' }}>Local Execution Recommended:</strong> Live browser-based test execution is not supported on Vercel's serverless cloud because headless Chrome processes cannot run in serverless containers. To execute live AI agent sequences, please run the project locally (<code style={{ background: 'rgba(0,0,0,0.3)', padding: '2px 6px', borderRadius: '4px', fontFamily: 'monospace' }}>http://localhost:5173</code>) with the local backend running (<code style={{ background: 'rgba(0,0,0,0.3)', padding: '2px 6px', borderRadius: '4px', fontFamily: 'monospace' }}>npm run server</code>).
-            </div>
+            <span style={{ fontSize: '1rem' }}>⚠️</span>
+            <span>
+              <strong style={{ color: '#fbbf24' }}>Local Execution Recommended: </strong>
+              Headless Chrome cannot run on Vercel. Run locally with <code style={{ background: 'rgba(0,0,0,0.3)', padding: '1px 5px', borderRadius: '3px' }}>npm run server</code>
+            </span>
           </div>
           <button 
             onClick={() => setShowWarning(false)}
-            style={{ 
-              background: 'transparent', 
-              border: 'none', 
-              color: '#fbbf24', 
-              cursor: 'pointer', 
-              fontSize: '1rem', 
-              fontWeight: 'bold',
-              padding: '0.2rem 0.5rem',
-              borderRadius: '4px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}
-            onMouseEnter={e => e.currentTarget.style.background = 'rgba(245, 158, 11, 0.15)'}
-            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-          >
-            ✕
-          </button>
+            style={{ background: 'transparent', border: 'none', color: '#fbbf24', cursor: 'pointer', fontSize: '1rem', padding: '0.2rem 0.4rem', borderRadius: '4px', flexShrink: 0 }}
+          >✕</button>
         </div>
       )}
-      <div style={{ display: 'grid', gridTemplateColumns: '380px 1fr', gap: '1.5rem', flex: 1, minHeight: 0 }}>
-        {/* LEFT: STEP EDITOR */}
-        <div style={{ ...glassStyle, display: 'flex', flexDirection: 'column', gap: '1rem', overflowY: 'auto', minWidth: '380px', height: '100%', maxHeight: '100%' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-          <div>
-            <h3 style={{ margin: 0, color: '#f8fafc', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <FileText size={18} color="#818cf8" /> Agent Execution
-            </h3>
-            <p style={{ margin: '0.2rem 0 0', color: '#94a3b8', fontSize: '0.85rem' }}>Select or edit steps for the AI agent</p>
-          </div>
-          <div style={{ display: 'flex', gap: '0.5rem' }}>
-            <button onClick={runAllSequential} disabled={isExecuting} style={{ background: 'rgba(16, 185, 129, 0.1)', border: '1px solid #10b981', color: '#10b981', padding: '0.4rem 0.8rem', borderRadius: '8px', fontSize: '0.75rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-              <Play size={14} /> Run All Sequence
-            </button>
-            <button onClick={addStep} style={{ background: 'rgba(129, 140, 248, 0.1)', border: '1px solid #818cf8', color: '#818cf8', padding: '0.4rem 0.8rem', borderRadius: '8px', fontSize: '0.75rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-              <Plus size={14} /> Add Step
-            </button>
-          </div>
-        </div>
 
-        {/* Test Case Selector */}
-        <div style={{ background: 'rgba(255,255,255,0.03)', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.05)', overflow: 'hidden' }}>
+      {/* Main 2-column Layout */}
+      <div style={{ 
+        display: 'grid', 
+        gridTemplateColumns: '420px 1fr', 
+        gap: '1.25rem', 
+        flex: 1, 
+        minHeight: 0,
+        overflow: 'hidden'
+      }}>
+        
+        {/* ===== LEFT PANEL ===== */}
+        <div style={{ 
+          display: 'flex', 
+          flexDirection: 'column', 
+          gap: '0.85rem',
+          overflowY: 'auto',
+          paddingRight: '4px',
+          height: '100%'
+        }}>
+          
+          {/* Header Row */}
+          <div style={{ 
+            background: 'rgba(15,23,42,0.7)', 
+            backdropFilter: 'blur(12px)', 
+            borderRadius: '14px', 
+            border: '1px solid rgba(99,102,241,0.15)', 
+            padding: '1rem 1.2rem',
+            flexShrink: 0
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <div>
+                <h3 style={{ margin: 0, color: '#f8fafc', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '1rem' }}>
+                  <FileText size={17} color="#818cf8" /> Agent Execution
+                </h3>
+                <p style={{ margin: '0.2rem 0 0', color: '#64748b', fontSize: '0.78rem' }}>Configure and run AI-driven test sequences</p>
+              </div>
+              <div style={{ display: 'flex', gap: '0.5rem', flexShrink: 0 }}>
+                <button 
+                  onClick={runAllSequential} 
+                  disabled={isExecuting || generatedCases.length === 0} 
+                  style={{ 
+                    background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.3)', 
+                    color: '#10b981', padding: '0.4rem 0.75rem', borderRadius: '8px', 
+                    fontSize: '0.73rem', cursor: isExecuting ? 'not-allowed' : 'pointer', 
+                    display: 'flex', alignItems: 'center', gap: '0.35rem', opacity: isExecuting ? 0.5 : 1 
+                  }}
+                >
+                  <Play size={12} /> Run All
+                </button>
+                <button 
+                  onClick={addStep} 
+                  style={{ 
+                    background: 'rgba(129,140,248,0.1)', border: '1px solid rgba(129,140,248,0.3)', 
+                    color: '#818cf8', padding: '0.4rem 0.75rem', borderRadius: '8px', 
+                    fontSize: '0.73rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.35rem' 
+                  }}
+                >
+                  <Plus size={12} /> Add Step
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Test Case Selector */}
+          <div style={{ 
+            background: 'rgba(15,23,42,0.7)', 
+            backdropFilter: 'blur(12px)', 
+            borderRadius: '14px', 
+            border: '1px solid rgba(255,255,255,0.06)', 
+            overflow: 'hidden',
+            flexShrink: 0
+          }}>
             <div 
               onClick={() => setCaseExpanded(!caseExpanded)}
-              style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.65rem 0.85rem', cursor: 'pointer', background: 'rgba(255,255,255,0.01)' }}
+              style={{ 
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center', 
+                padding: '0.75rem 1.1rem', cursor: 'pointer',
+                background: 'rgba(99,102,241,0.04)',
+                borderBottom: caseExpanded ? '1px solid rgba(255,255,255,0.04)' : 'none'
+              }}
             >
-              <label style={{ display: 'block', fontSize: '0.7rem', color: '#6366f1', fontWeight: 600, textTransform: 'uppercase', pointerEvents: 'none', margin: 0 }}>Selected Test Case</label>
-              <span style={{ fontSize: '0.8rem', color: '#6366f1' }}>{caseExpanded ? '▼' : '▶'}</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <Zap size={13} color="#6366f1" />
+                <span style={{ fontSize: '0.72rem', color: '#6366f1', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  Select Test Case
+                </span>
+              </div>
+              {caseExpanded ? <ChevronUp size={14} color="#6366f1" /> : <ChevronDown size={14} color="#6366f1" />}
             </div>
             {caseExpanded && (
-              <div style={{ padding: '0 0.85rem 0.85rem 0.85rem' }}>
+              <div style={{ padding: '0.85rem 1.1rem' }}>
                 <select 
                     value={selectedCaseId} 
                     onChange={(e) => handleCaseSelect(e.target.value)}
-                    style={{ width: '100%', background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.05)', color: '#f8fafc', outline: 'none', fontSize: '0.85rem', padding: '0.4rem 0.6rem', borderRadius: '8px' }}
+                    style={{ 
+                      width: '100%', background: 'rgba(0,0,0,0.25)', 
+                      border: '1px solid rgba(99,102,241,0.2)', color: '#f1f5f9', 
+                      outline: 'none', fontSize: '0.85rem', padding: '0.55rem 0.8rem', 
+                      borderRadius: '9px', cursor: 'pointer',
+                      boxSizing: 'border-box'
+                    }}
                 >
-                    <option value="" disabled>Choose a test case...</option>
+                    <option value="" disabled style={{ background: '#0f172a' }}>Choose a test case...</option>
                     {generatedCases.length > 0 ? (
                         generatedCases.map(tc => (
                             <option key={tc.TC_ID} value={tc.TC_ID} style={{ background: '#0f172a' }}>
-                                {tc.TC_ID}: {tc.Title || tc['Test Case Title'] || tc.Scenario?.split('\n')[0]?.slice(0, 40)}
+                                {tc.TC_ID}: {tc.Title || tc['Test Case Title'] || tc.Scenario?.split('\n')[0]?.slice(0, 45)}
                             </option>
                         ))
                     ) : (
@@ -375,208 +412,352 @@ const ExecutionPage = ({ story, credentials }) => {
                 </select>
               </div>
             )}
-        </div>
+          </div>
 
-        {/* Target Environment */}
-        <div style={{ background: 'rgba(255,255,255,0.03)', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.05)', overflow: 'hidden' }}>
+          {/* Target Environment */}
+          <div style={{ 
+            background: 'rgba(15,23,42,0.7)', 
+            backdropFilter: 'blur(12px)', 
+            borderRadius: '14px', 
+            border: '1px solid rgba(255,255,255,0.06)', 
+            overflow: 'hidden',
+            flexShrink: 0
+          }}>
             <div 
               onClick={() => setEnvExpanded(!envExpanded)}
-              style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.65rem 0.85rem', cursor: 'pointer', background: 'rgba(255,255,255,0.01)' }}
-            >
-              <label style={{ display: 'block', fontSize: '0.7rem', color: '#6366f1', fontWeight: 600, textTransform: 'uppercase', pointerEvents: 'none', margin: 0 }}>Target Environment</label>
-              <span style={{ fontSize: '0.8rem', color: '#6366f1' }}>{envExpanded ? '▼' : '▶'}</span>
-            </div>
-            {envExpanded && (
-              <div style={{ padding: '0 0.85rem 0.85rem 0.85rem', display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
-                  <input 
-                      type="text" 
-                      placeholder="Application URL (e.g., http://192.168.2.67/login)" 
-                      value={targetUrl}
-                      onChange={(e) => setTargetUrl(e.target.value)}
-                      style={{ width: '100%', background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.05)', color: '#f8fafc', padding: '0.5rem 0.8rem', borderRadius: '8px', fontSize: '0.85rem', outline: 'none' }}
-                  />
-                  <div style={{ display: 'flex', gap: '0.6rem' }}>
-                      <input 
-                          type="text" 
-                          placeholder="Username" 
-                          value={targetUser}
-                          onChange={(e) => setTargetUser(e.target.value)}
-                          style={{ flex: 1, background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.05)', color: '#f8fafc', padding: '0.5rem 0.8rem', borderRadius: '8px', fontSize: '0.85rem', outline: 'none', minWidth: 0 }}
-                      />
-                      <input 
-                          type="password" 
-                          placeholder="Password" 
-                          value={targetPass}
-                          onChange={(e) => setTargetPass(e.target.value)}
-                          style={{ flex: 1, background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.05)', color: '#f8fafc', padding: '0.5rem 0.8rem', borderRadius: '8px', fontSize: '0.85rem', outline: 'none', minWidth: 0 }}
-                      />
-                  </div>
-              </div>
-            )}
-        </div>
-
-        {/* Steps List */}
-        <div style={{ flex: '1 1 auto', minHeight: '180px', overflowY: 'auto', paddingRight: '0.5rem' }}>
-          <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginBottom: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-            <ChevronRight size={14} /> Execution Steps
-          </div>
-          <AnimatePresence>
-            {steps.map((step, index) => (
-              <motion.div 
-                key={step.id}
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, scale: 0.95 }}
-                style={{ 
-                  background: 'rgba(255,255,255,0.02)', 
-                  borderRadius: '10px', 
-                  padding: '0.75rem 1rem', 
-                  marginBottom: '0.6rem',
-                  border: `1px solid ${stepStatus[index] === 'running' ? '#818cf8' : 'rgba(255,255,255,0.05)'}`,
-                  display: 'flex',
-                  gap: '1rem',
-                  alignItems: 'center'
-                }}
-              >
-                <div style={{ 
-                  width: '24px', height: '24px', borderRadius: '50%', 
-                  background: stepStatus[index] === 'completed' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(99, 102, 241, 0.1)', 
-                  color: stepStatus[index] === 'completed' ? '#10b981' : '#818cf8',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: '0.75rem', fontWeight: 600
-                }}>
-                  {index + 1}
-                </div>
-                
-                <div style={{ flex: 1 }}>
-                  {step.isEditing ? (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <input 
-                        autoFocus
-                        style={{ 
-                          width: '100%', background: 'transparent', border: 'none', borderBottom: '1px solid #818cf8',
-                          color: '#f8fafc', outline: 'none', padding: '2px 0', fontSize: '0.9rem'
-                        }}
-                        value={step.text}
-                        onChange={(e) => updateStepText(step.id, e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && toggleEdit(step.id)}
-                      />
-                      <button onClick={() => toggleEdit(step.id)} style={{ background: 'transparent', border: 'none', color: '#10b981', cursor: 'pointer' }}>
-                        <Save size={14} />
-                      </button>
-                    </div>
-                  ) : (
-                    <div 
-                      onClick={() => toggleEdit(step.id)}
-                      style={{ color: '#e2e8f0', cursor: 'text', fontSize: '0.9rem', width: '100%' }}
-                    >
-                      {step.text}
-                    </div>
-                  )}
-                </div>
-
-                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                  {stepStatus[index] === 'completed' && <CheckCircle2 size={16} color="#10b981" />}
-                  {stepStatus[index] === 'failed' && <XCircle size={16} color="#ef4444" />}
-                  {stepStatus[index] === 'running' && <Loader2 size={16} color="#818cf8" className="spin-icon" />}
-                  {!isExecuting && (
-                    <button onClick={() => removeStep(step.id)} style={{ background: 'transparent', border: 'none', color: '#475569', cursor: 'pointer', marginLeft: '0.4rem' }}>
-                      <Trash2 size={14} />
-                    </button>
-                  )}
-                </div>
-              </motion.div>
-            ))}
-          </AnimatePresence>
-        </div>
-
-        {/* Reference Context Info */}
-        {contextCode && (
-            <div style={{ fontSize: '0.7rem', color: '#10b981', background: 'rgba(16, 185, 129, 0.05)', padding: '0.5rem', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <Code size={14} /> Automation context found! Agent will use it for selector hints.
-            </div>
-        )}
-
-        <div style={{ borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '1rem', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(255,255,255,0.05)', padding: '0.5rem 1rem', borderRadius: '10px' }}>
-            <span style={{ color: '#94a3b8', fontSize: '0.8rem' }}>Engine:</span>
-            <select 
-              value={engine} 
-              onChange={(e) => setEngine(e.target.value)}
-              style={{ background: 'transparent', border: 'none', color: '#f8fafc', outline: 'none', fontSize: '0.8rem', flex: 1 }}
-            >
-              <option value="groq" style={{ background: '#0f172a' }}>Groq (Llama 3)</option>
-              <option value="openrouter" style={{ background: '#0f172a' }}>OpenRouter</option>
-              <option value="gemini" style={{ background: '#0f172a' }}>Gemini</option>
-            </select>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(255,255,255,0.05)', padding: '0.5rem 1rem', borderRadius: '10px' }}>
-            <span style={{ color: '#94a3b8', fontSize: '0.8rem' }}>Mode:</span>
-            <button 
-              onClick={() => setHeadless(!headless)} 
               style={{ 
-                background: 'transparent', border: 'none', color: '#f8fafc', display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer', fontSize: '0.8rem'
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center', 
+                padding: '0.75rem 1.1rem', cursor: 'pointer',
+                background: 'rgba(16,185,129,0.04)',
+                borderBottom: envExpanded ? '1px solid rgba(255,255,255,0.04)' : 'none'
               }}
             >
-              {headless ? <EyeOff size={14} /> : <Eye size={14} />} {headless ? 'Headless' : 'Headed'}
-            </button>
-          </div>
-          <button 
-            onClick={() => isExecuting ? stopExecution() : startAgentExecution(selectedCaseId || null, null)} 
-            className="btn-primary" 
-            style={{ 
-              gridColumn: 'span 2', background: isExecuting ? 'rgba(239, 68, 68, 0.1)' : 'rgba(16, 185, 129, 0.1)',
-              color: isExecuting ? '#ef4444' : '#10b981', border: `1px solid ${isExecuting ? '#ef4444' : '#10b981'}`
-            }}
-          >
-            {isExecuting ? <Square size={16} /> : <Bot size={16} />} {isExecuting ? `Stop Agent (${executionQueue.length > 0 ? executionQueue.length + ' left' : ''})` : 'Run Selected Test Case'}
-          </button>
-        </div>
-      </div>
-
-      {/* RIGHT: LIVE AGENT LOGS */}
-      <div style={{ ...glassStyle, display: 'flex', flexDirection: 'column', gap: '1rem', background: '#0a0f1e', minWidth: 0, height: '100%', overflow: 'hidden' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h3 style={{ margin: 0, color: '#f8fafc', display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
-            <Terminal size={18} color="#10b981" /> 
-            Live Agent Log 
-            {runningTcId && <span style={{ background: 'rgba(99,102,241,0.1)', color: '#818cf8', padding: '2px 8px', borderRadius: '6px', fontSize: '0.7rem', border: '1px solid rgba(99,102,241,0.2)' }}>{runningTcId}</span>}
-          </h3>
-          {isExecuting && <div style={{ fontSize: '0.75rem', color: '#10b981', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-            <span className="dot-blink" style={{ width: '8px', height: '8px', background: '#10b981', borderRadius: '50%' }} /> {runningTcId ? 'Executing Test Case...' : 'Streaming...'}
-          </div>}
-        </div>
-
-        <div style={{ 
-          flex: 1, background: 'rgba(0,0,0,0.3)', borderRadius: '12px', padding: '1rem', 
-          fontFamily: 'monospace', fontSize: '0.85rem', overflowY: 'auto', border: '1px solid rgba(255,255,255,0.05)'
-        }}>
-          {logs.length === 0 && <div style={{ color: '#475569', textAlign: 'center', marginTop: '4rem' }}>Waiting for execution to start...</div>}
-          {logs.map(log => (
-            <div key={log.id} style={{ marginBottom: '0.5rem', display: 'flex', gap: '0.8rem' }}>
-              <span style={{ color: '#475569' }}>[{log.time}]</span>
-              <span style={{ color: logColors[log.type] || '#f8fafc' }}>{log.text}</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <Globe size={13} color="#10b981" />
+                <span style={{ fontSize: '0.72rem', color: '#10b981', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  Target Environment
+                </span>
+              </div>
+              {envExpanded ? <ChevronUp size={14} color="#10b981" /> : <ChevronDown size={14} color="#10b981" />}
             </div>
-          ))}
-          <div ref={logEndRef} />
-        </div>
+            {envExpanded && (
+              <div style={{ padding: '0.85rem 1.1rem', display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                <div style={{ position: 'relative' }}>
+                  <Globe size={13} color="#475569" style={{ position: 'absolute', left: '0.7rem', top: '50%', transform: 'translateY(-50%)' }} />
+                  <input 
+                      type="text" 
+                      placeholder="Application URL (e.g., http://192.168.1.1/login)" 
+                      value={targetUrl}
+                      onChange={(e) => setTargetUrl(e.target.value)}
+                      style={{ 
+                        width: '100%', background: 'rgba(0,0,0,0.2)', 
+                        border: '1px solid rgba(255,255,255,0.07)', color: '#f1f5f9', 
+                        padding: '0.55rem 0.8rem 0.55rem 2.2rem', borderRadius: '9px', 
+                        fontSize: '0.83rem', outline: 'none', boxSizing: 'border-box'
+                      }}
+                  />
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.6rem' }}>
+                  <div style={{ position: 'relative' }}>
+                    <User size={13} color="#475569" style={{ position: 'absolute', left: '0.7rem', top: '50%', transform: 'translateY(-50%)' }} />
+                    <input 
+                        type="text" 
+                        placeholder="Username" 
+                        value={targetUser}
+                        onChange={(e) => setTargetUser(e.target.value)}
+                        style={{ 
+                          width: '100%', background: 'rgba(0,0,0,0.2)', 
+                          border: '1px solid rgba(255,255,255,0.07)', color: '#f1f5f9', 
+                          padding: '0.55rem 0.6rem 0.55rem 2.2rem', borderRadius: '9px', 
+                          fontSize: '0.83rem', outline: 'none', boxSizing: 'border-box'
+                        }}
+                    />
+                  </div>
+                  <div style={{ position: 'relative' }}>
+                    <Lock size={13} color="#475569" style={{ position: 'absolute', left: '0.7rem', top: '50%', transform: 'translateY(-50%)' }} />
+                    <input 
+                        type="password" 
+                        placeholder="Password" 
+                        value={targetPass}
+                        onChange={(e) => setTargetPass(e.target.value)}
+                        style={{ 
+                          width: '100%', background: 'rgba(0,0,0,0.2)', 
+                          border: '1px solid rgba(255,255,255,0.07)', color: '#f1f5f9', 
+                          padding: '0.55rem 0.6rem 0.55rem 2.2rem', borderRadius: '9px', 
+                          fontSize: '0.83rem', outline: 'none', boxSizing: 'border-box'
+                        }}
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
 
-        {/* SCREENSHOT GALLERY */}
-        <div style={{ height: '120px', background: 'rgba(255,255,255,0.02)', borderRadius: '12px', padding: '0.75rem', display: 'flex', gap: '0.75rem', overflowX: 'auto', flexShrink: 0 }}>
-          {Object.values(screenshots).flat().length === 0 && (
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#475569' }}>
-              <ImageIcon size={24} style={{ marginBottom: '0.4rem' }} />
-              <span style={{ fontSize: '0.75rem' }}>No screenshots yet</span>
+          {/* Execution Steps */}
+          <div style={{ 
+            background: 'rgba(15,23,42,0.7)', 
+            backdropFilter: 'blur(12px)', 
+            borderRadius: '14px', 
+            border: '1px solid rgba(255,255,255,0.06)', 
+            padding: '0.85rem 1.1rem',
+            flex: '1 1 auto',
+            minHeight: '120px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '0.6rem'
+          }}>
+            <div style={{ fontSize: '0.72rem', color: '#818cf8', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: '0.4rem', flexShrink: 0 }}>
+              <ChevronRight size={13} /> Execution Steps
+            </div>
+            <div style={{ overflowY: 'auto', flex: 1 }}>
+              <AnimatePresence>
+                {steps.map((step, index) => (
+                  <motion.div 
+                    key={step.id}
+                    initial={{ opacity: 0, x: -16 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, scale: 0.95 }}
+                    style={{ 
+                      background: stepStatus[index] === 'running' 
+                        ? 'rgba(99,102,241,0.08)' 
+                        : 'rgba(255,255,255,0.02)', 
+                      borderRadius: '10px', 
+                      padding: '0.65rem 0.9rem', 
+                      marginBottom: '0.5rem',
+                      border: `1px solid ${
+                        stepStatus[index] === 'running' ? 'rgba(99,102,241,0.4)' : 
+                        stepStatus[index] === 'completed' ? 'rgba(16,185,129,0.2)' : 
+                        stepStatus[index] === 'failed' ? 'rgba(239,68,68,0.2)' : 
+                        'rgba(255,255,255,0.04)'
+                      }`,
+                      display: 'flex',
+                      gap: '0.75rem',
+                      alignItems: 'center',
+                      transition: 'border-color 0.2s'
+                    }}
+                  >
+                    <div style={{ 
+                      width: '22px', height: '22px', borderRadius: '50%', flexShrink: 0,
+                      background: stepStatus[index] === 'completed' ? 'rgba(16,185,129,0.15)' : 
+                                  stepStatus[index] === 'failed' ? 'rgba(239,68,68,0.15)' :
+                                  'rgba(99,102,241,0.15)', 
+                      color: stepStatus[index] === 'completed' ? '#10b981' : 
+                             stepStatus[index] === 'failed' ? '#ef4444' : '#818cf8',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: '0.72rem', fontWeight: 700
+                    }}>
+                      {index + 1}
+                    </div>
+                    
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      {step.isEditing ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                          <input 
+                            autoFocus
+                            style={{ 
+                              width: '100%', background: 'transparent', border: 'none', 
+                              borderBottom: '1px solid #818cf8', color: '#f8fafc', 
+                              outline: 'none', padding: '2px 0', fontSize: '0.85rem'
+                            }}
+                            value={step.text}
+                            onChange={(e) => updateStepText(step.id, e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && toggleEdit(step.id)}
+                          />
+                          <button onClick={() => toggleEdit(step.id)} style={{ background: 'transparent', border: 'none', color: '#10b981', cursor: 'pointer', flexShrink: 0 }}>
+                            <Save size={13} />
+                          </button>
+                        </div>
+                      ) : (
+                        <div 
+                          onClick={() => toggleEdit(step.id)}
+                          style={{ color: '#cbd5e1', cursor: 'text', fontSize: '0.85rem', wordBreak: 'break-word', lineHeight: '1.4' }}
+                        >
+                          {step.text}
+                        </div>
+                      )}
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '0.3rem', alignItems: 'center', flexShrink: 0 }}>
+                      {stepStatus[index] === 'completed' && <CheckCircle2 size={15} color="#10b981" />}
+                      {stepStatus[index] === 'failed' && <XCircle size={15} color="#ef4444" />}
+                      {stepStatus[index] === 'running' && <Loader2 size={15} color="#818cf8" className="spin-icon" />}
+                      {!isExecuting && (
+                        <button onClick={() => removeStep(step.id)} style={{ background: 'transparent', border: 'none', color: '#334155', cursor: 'pointer', marginLeft: '0.2rem', display: 'flex', alignItems: 'center' }}>
+                          <Trash2 size={13} />
+                        </button>
+                      )}
+                    </div>
+                  </motion.div>
+                ))}
+              </AnimatePresence>
+            </div>
+          </div>
+
+          {/* Context Info */}
+          {contextCode && (
+            <div style={{ 
+              fontSize: '0.75rem', color: '#10b981', 
+              background: 'rgba(16,185,129,0.06)', 
+              padding: '0.5rem 0.85rem', borderRadius: '9px', 
+              display: 'flex', alignItems: 'center', gap: '0.5rem',
+              border: '1px solid rgba(16,185,129,0.1)',
+              flexShrink: 0
+            }}>
+              <Code size={13} /> Automation context loaded — agent will use it for selector hints.
             </div>
           )}
-          {Object.values(screenshots).flat().map((src, i) => (
-            <div key={i} style={{ position: 'relative', minWidth: '180px', height: '100%', borderRadius: '8px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.1)' }}>
-              <img src={API_URLS.RECORDINGS(src)} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="Step screenshot" />
-              <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'rgba(0,0,0,0.6)', padding: '2px 8px', fontSize: '0.65rem', color: '#fff' }}>
-                Capture #{i+1}
+
+          {/* Engine + Mode + Run Button */}
+          <div style={{ 
+            background: 'rgba(15,23,42,0.7)', 
+            backdropFilter: 'blur(12px)', 
+            borderRadius: '14px', 
+            border: '1px solid rgba(255,255,255,0.06)', 
+            padding: '0.9rem 1.1rem',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '0.75rem',
+            flexShrink: 0
+          }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+              {/* Engine Selector */}
+              <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: '10px', padding: '0.5rem 0.75rem', border: '1px solid rgba(255,255,255,0.06)' }}>
+                <div style={{ fontSize: '0.68rem', color: '#64748b', marginBottom: '0.3rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>AI Engine</div>
+                <select 
+                  value={engine} 
+                  onChange={(e) => setEngine(e.target.value)}
+                  style={{ background: 'transparent', border: 'none', color: '#f1f5f9', outline: 'none', fontSize: '0.85rem', width: '100%', cursor: 'pointer' }}
+                >
+                  <option value="groq" style={{ background: '#0f172a' }}>⚡ Groq (Llama 3)</option>
+                  <option value="openrouter" style={{ background: '#0f172a' }}>🔀 OpenRouter</option>
+                  <option value="gemini" style={{ background: '#0f172a' }}>✨ Gemini</option>
+                </select>
+              </div>
+              
+              {/* Mode Toggle */}
+              <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: '10px', padding: '0.5rem 0.75rem', border: '1px solid rgba(255,255,255,0.06)', display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                <div style={{ fontSize: '0.68rem', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Browser Mode</div>
+                <button 
+                  onClick={() => setHeadless(!headless)} 
+                  style={{ 
+                    background: 'transparent', border: 'none', color: headless ? '#94a3b8' : '#10b981', 
+                    display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer', fontSize: '0.85rem', padding: 0, fontWeight: 500
+                  }}
+                >
+                  {headless ? <EyeOff size={14} /> : <Eye size={14} />} {headless ? 'Headless' : 'Headed (Visible)'}
+                </button>
               </div>
             </div>
-          ))}
+
+            {/* Run/Stop Button */}
+            <button 
+              onClick={() => isExecuting ? stopExecution() : startAgentExecution(selectedCaseId || null, null)} 
+              style={{ 
+                width: '100%',
+                padding: '0.75rem',
+                borderRadius: '11px',
+                border: `1px solid ${isExecuting ? '#ef4444' : '#10b981'}`,
+                background: isExecuting 
+                  ? 'linear-gradient(135deg, rgba(239,68,68,0.12), rgba(220,38,38,0.08))' 
+                  : 'linear-gradient(135deg, rgba(16,185,129,0.15), rgba(5,150,105,0.1))',
+                color: isExecuting ? '#ef4444' : '#10b981',
+                fontSize: '0.9rem',
+                fontWeight: 600,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '0.5rem',
+                transition: 'all 0.2s',
+                letterSpacing: '0.02em'
+              }}
+            >
+              {isExecuting ? <Square size={16} /> : <Bot size={16} />}
+              {isExecuting 
+                ? `Stop Agent ${executionQueue.length > 0 ? `(${executionQueue.length} queued)` : ''}` 
+                : 'Run Selected Test Case'
+              }
+            </button>
+          </div>
+        </div>
+
+        {/* ===== RIGHT PANEL: LIVE AGENT LOGS ===== */}
+        <div style={{ 
+          background: 'rgba(8,12,28,0.85)', 
+          backdropFilter: 'blur(12px)',
+          borderRadius: '16px', 
+          border: '1px solid rgba(255,255,255,0.05)', 
+          padding: '1.2rem', 
+          display: 'flex', 
+          flexDirection: 'column', 
+          gap: '1rem', 
+          minWidth: 0, 
+          height: '100%', 
+          overflow: 'hidden' 
+        }}>
+          {/* Log Header */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
+            <h3 style={{ margin: 0, color: '#f8fafc', display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '1rem' }}>
+              <Terminal size={17} color="#10b981" /> 
+              Live Agent Log 
+              {runningTcId && (
+                <span style={{ background: 'rgba(99,102,241,0.12)', color: '#818cf8', padding: '2px 10px', borderRadius: '6px', fontSize: '0.7rem', border: '1px solid rgba(99,102,241,0.2)', fontWeight: 600 }}>
+                  {runningTcId}
+                </span>
+              )}
+            </h3>
+            {isExecuting && (
+              <div style={{ fontSize: '0.75rem', color: '#10b981', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <span className="dot-blink" style={{ width: '7px', height: '7px', background: '#10b981', borderRadius: '50%', display: 'inline-block' }} />
+                {runningTcId ? 'Executing Test Case...' : 'Streaming...'}
+              </div>
+            )}
+          </div>
+
+          {/* Log Terminal */}
+          <div style={{ 
+            flex: 1, background: 'rgba(0,0,0,0.4)', borderRadius: '12px', padding: '1rem', 
+            fontFamily: '"Fira Code", "Cascadia Code", monospace', fontSize: '0.82rem', 
+            overflowY: 'auto', border: '1px solid rgba(255,255,255,0.04)', minHeight: 0
+          }}>
+            {logs.length === 0 && (
+              <div style={{ color: '#334155', textAlign: 'center', marginTop: '5rem', fontSize: '0.85rem' }}>
+                <Terminal size={32} style={{ marginBottom: '0.75rem', opacity: 0.3 }} />
+                <div>Waiting for execution to start...</div>
+              </div>
+            )}
+            {logs.map(log => (
+              <div key={log.id} style={{ marginBottom: '0.45rem', display: 'flex', gap: '0.75rem', lineHeight: '1.5' }}>
+                <span style={{ color: '#334155', flexShrink: 0 }}>[{log.time}]</span>
+                <span style={{ color: logColors[log.type] || '#f8fafc', wordBreak: 'break-word' }}>{log.text}</span>
+              </div>
+            ))}
+            <div ref={logEndRef} />
+          </div>
+
+          {/* Screenshot Gallery */}
+          <div style={{ 
+            height: '110px', background: 'rgba(255,255,255,0.02)', borderRadius: '11px', 
+            padding: '0.65rem 0.85rem', display: 'flex', gap: '0.65rem', 
+            overflowX: 'auto', flexShrink: 0, border: '1px solid rgba(255,255,255,0.03)',
+            alignItems: 'center'
+          }}>
+            {Object.values(screenshots).flat().length === 0 ? (
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#1e293b' }}>
+                <ImageIcon size={22} style={{ marginBottom: '0.35rem' }} />
+                <span style={{ fontSize: '0.72rem' }}>No screenshots yet</span>
+              </div>
+            ) : (
+              Object.values(screenshots).flat().map((src, i) => (
+                <div key={i} style={{ position: 'relative', minWidth: '160px', height: '100%', borderRadius: '8px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.08)', flexShrink: 0 }}>
+                  <img src={API_URLS.RECORDINGS(src)} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="Step screenshot" />
+                  <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'rgba(0,0,0,0.65)', padding: '2px 7px', fontSize: '0.62rem', color: '#fff' }}>
+                    Capture #{i+1}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
         </div>
       </div>
 
@@ -586,29 +767,15 @@ const ExecutionPage = ({ story, credentials }) => {
         .spin-icon { animation: spin 2s linear infinite; }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         
-        /* Custom sleek scrollbars for a premium dark mode aesthetic */
         * {
           scrollbar-width: thin;
-          scrollbar-color: rgba(99, 102, 241, 0.25) rgba(255, 255, 255, 0.02);
+          scrollbar-color: rgba(99,102,241,0.2) rgba(255,255,255,0.01);
         }
-        ::-webkit-scrollbar {
-          width: 5px;
-          height: 5px;
-        }
-        ::-webkit-scrollbar-track {
-          background: rgba(255, 255, 255, 0.01);
-          border-radius: 8px;
-        }
-        ::-webkit-scrollbar-thumb {
-          background: rgba(99, 102, 241, 0.25);
-          border-radius: 8px;
-          transition: background 0.2s;
-        }
-        ::-webkit-scrollbar-thumb:hover {
-          background: rgba(99, 102, 241, 0.45);
-        }
+        ::-webkit-scrollbar { width: 5px; height: 5px; }
+        ::-webkit-scrollbar-track { background: rgba(255,255,255,0.01); border-radius: 8px; }
+        ::-webkit-scrollbar-thumb { background: rgba(99,102,241,0.2); border-radius: 8px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(99,102,241,0.4); }
       `}</style>
-      </div>
     </div>
   );
 };
