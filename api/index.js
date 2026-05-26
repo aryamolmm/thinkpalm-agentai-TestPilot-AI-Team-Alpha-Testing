@@ -1132,9 +1132,14 @@ The script MUST be production-ready. Return ONLY the raw code block with no mark
        Description: ${story.description || 'No description'}.
        Generate diverse test cases covering these types: ${typesList}.
        The test steps MUST be in ${testFormat === 'bdd' ? 'Strict BDD / Gherkin format (Given/When/Then)' : 'Normal step-by-step format (1. Do this, 2. Do that)'}.
-       Format: JSON array of objects.
-       Columns required: "TC_ID" (e.g. TC-01), "Scenario_Name", "Type" (e.g. Happy Path), "Gherkin" (The test steps text), and "Expected_Result" (Brief statement of expected outcome).
-       Return ONLY the valid JSON array without markdown wrapping.`;
+       
+       CRITICAL JSON RULES:
+       - You MUST respond with a valid JSON array of objects.
+       - Each object must have these exact keys: "TC_ID", "Scenario_Name", "Type", "Gherkin", "Expected_Result".
+       - All string values must be properly escaped (especially double quotes inside strings). Use single quotes or escape them with a backslash (\\").
+       - Do NOT include any comments (e.g., // or /*) inside the JSON.
+       - Do NOT include trailing commas at the end of objects or arrays.
+       - Return ONLY the raw JSON array inside brackets [ ... ]. Do not wrap it in markdown code blocks like \`\`\`json.`;
 
   try {
     let text = '';
@@ -1229,52 +1234,62 @@ The script MUST be production-ready. Return ONLY the raw code block with no mark
         text = text.replace(/```[a-z]*/gi, '').replace(/```/g, '').trim();
         res.json({ script: text });
     } else {
-        // Robust JSON extraction
-        let parsed = null;
-        let cleanedText = text.trim();
-        
-        // Strip markdown code block wrappers if present
-        if (cleanedText.startsWith('```')) {
-          cleanedText = cleanedText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
-        }
-
-        // Find first '[' and last ']' to extract JSON array
-        const firstBracket = cleanedText.indexOf('[');
-        const lastBracket = cleanedText.lastIndexOf(']');
-        
-        if (firstBracket !== -1 && lastBracket !== -1 && lastBracket > firstBracket) {
-          const jsonSub = cleanedText.substring(firstBracket, lastBracket + 1);
-          try {
-            parsed = JSON.parse(jsonSub);
-          } catch (e) {
-            console.warn('[Parser] Standard bracket array extract parse failed:', e.message);
+        // Robust JSON extraction & cleaning helper
+        const cleanJSON = (str) => {
+          let cleaned = str.trim();
+          
+          // Strip markdown code block wrappers if present
+          if (cleaned.startsWith('```')) {
+            cleaned = cleaned.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
           }
-        }
 
-        // Fallback: match any list-like pattern or first brace matches
-        if (!parsed) {
-          try {
-            const firstBrace = cleanedText.indexOf('{');
-            const lastBrace = cleanedText.lastIndexOf('}');
+          // Find first '[' and last ']' to extract JSON array
+          const firstBracket = cleaned.indexOf('[');
+          const lastBracket = cleaned.lastIndexOf(']');
+          
+          if (firstBracket !== -1 && lastBracket !== -1 && lastBracket > firstBracket) {
+            cleaned = cleaned.substring(firstBracket, lastBracket + 1);
+          } else {
+            // Check for brace array wrapping fallback
+            const firstBrace = cleaned.indexOf('{');
+            const lastBrace = cleaned.lastIndexOf('}');
             if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-              const braceStr = cleanedText.substring(firstBrace, lastBrace + 1);
-              parsed = JSON.parse('[' + braceStr + ']'); // Wrap single object into array if needed
+              cleaned = '[' + cleaned.substring(firstBrace, lastBrace + 1) + ']';
             }
-          } catch (e) {
-            console.warn('[Parser] Brace extract fallback failed:', e.message);
+          }
+
+          // Strip JavaScript comments (single and multiline) safely
+          cleaned = cleaned.replace(/\/\*[\s\S]*?\*\//g, ''); // multiline
+          cleaned = cleaned.replace(/(?:^|\s)\/\/[^\n]*/g, ''); // singleline
+
+          // Remove trailing commas in objects and arrays
+          cleaned = cleaned.replace(/,\s*([\]}])/g, '$1');
+
+          return cleaned;
+        };
+
+        let parsed = null;
+        let cleanedText = cleanJSON(text);
+
+        try {
+          parsed = JSON.parse(cleanedText);
+        } catch (e) {
+          console.warn('[Parser] Cleaned JSON parse failed:', e.message);
+          
+          // Fallback: match clean sub-bracket array
+          const subMatch = text.match(/\[\s*\{[\s\S]*\}\s*\]/);
+          if (subMatch) {
+            try {
+              parsed = JSON.parse(subMatch[0].replace(/,\s*([\]}])/g, '$1'));
+            } catch (err) {
+              console.warn('[Parser] Regex brace fallback parse failed:', err.message);
+            }
           }
         }
 
-        // Ultimate fallback: original regex matching
         if (!parsed) {
-          const jsonMatch = text.match(/\[\s*\{[\s\S]*\}\s*\]/); // greedy match of everything inside [ ... ]
-          const jsonText = jsonMatch ? jsonMatch[0] : text.replace(/```json|```|json/gi, '').trim();
-          try {
-            parsed = JSON.parse(jsonText);
-          } catch (parseErr) {
-            console.error('[JSON PARSE ERROR] All parsing strategies failed:', text.substring(0, 500));
-            throw new Error(`The AI returned an invalid format. Try regenerating. Raw start: ${text.substring(0, 120)}`);
-          }
+          console.error('[JSON PARSE ERROR] All parsing strategies failed:', text.substring(0, 500));
+          throw new Error(`The AI returned an invalid format. Try regenerating. Raw start: ${text.substring(0, 120)}`);
         }
         res.json({ testCases: parsed });
     }
