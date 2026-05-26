@@ -29,6 +29,15 @@ const ExecutionPage = ({ story, credentials }) => {
   const [envExpanded, setEnvExpanded] = useState(true);
   const [caseExpanded, setCaseExpanded] = useState(true);
   
+  const [executionServerUrl, setExecutionServerUrl] = useState(() => {
+    return localStorage.getItem('testpilot_execution_server_url') || 'http://localhost:3001';
+  });
+
+  const handleServerUrlChange = (val) => {
+    setExecutionServerUrl(val);
+    localStorage.setItem('testpilot_execution_server_url', val);
+  };
+  
   const eventSourceRef = useRef(null);
   const logEndRef = useRef(null);
 
@@ -177,7 +186,11 @@ const ExecutionPage = ({ story, credentials }) => {
       setCurrentExecution(executionId);
       setupStream(executionId, activeTcId);
     } catch (err) {
-      addLog(`❌ Failed to start agent: ${err.message}`, 'error');
+      let errMsg = err.message;
+      if (err.message === 'Network Error' || !err.response) {
+        errMsg = `Could not connect to local execution server at ${executionServerUrl}. Make sure 'npm run server' is running on your machine.`;
+      }
+      addLog(`❌ Failed to start agent: ${errMsg}`, 'error');
       setIsExecuting(false);
     }
   };
@@ -271,11 +284,11 @@ const ExecutionPage = ({ story, credentials }) => {
       {/* Top Warning Banner */}
       {isVercel && (
         <div style={{ 
-          background: 'linear-gradient(135deg, rgba(245,158,11,0.1), rgba(234,88,12,0.08))', 
-          border: '1px solid rgba(245,158,11,0.3)', 
+          background: 'linear-gradient(135deg, rgba(99,102,241,0.1), rgba(16,185,129,0.08))', 
+          border: '1px solid rgba(99,102,241,0.2)', 
           borderRadius: '10px', 
           padding: '0.65rem 1.2rem', 
-          color: '#fef3c7',
+          color: '#e2e8f0',
           fontSize: '0.82rem',
           display: 'flex',
           alignItems: 'center',
@@ -284,13 +297,12 @@ const ExecutionPage = ({ story, credentials }) => {
           flexShrink: 0
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', flex: 1 }}>
-            <span style={{ fontSize: '1rem' }}>🚫</span>
+            <span style={{ fontSize: '1rem' }}>🌐</span>
             <span>
-              <strong style={{ color: '#fbbf24' }}>Browser Execution Unavailable on Vercel: </strong>
-              Headless Chrome cannot run in serverless containers. Please run locally:
+              <strong style={{ color: '#818cf8' }}>Vercel Deployment Mode: </strong>
+              To execute tests in your local browser (headed/headless), start the backend server locally:
               <code style={{ background: 'rgba(0,0,0,0.35)', padding: '1px 6px', borderRadius: '3px', marginLeft: '4px' }}>npm run server</code>
-              {' '}then open{' '}
-              <code style={{ background: 'rgba(0,0,0,0.35)', padding: '1px 6px', borderRadius: '3px' }}>http://localhost:5173</code>
+              {' '}and configure the local server URL below.
             </span>
           </div>
         </div>
@@ -642,87 +654,85 @@ const ExecutionPage = ({ story, credentials }) => {
             gap: '0.75rem',
             flexShrink: 0
           }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
-              {/* Engine Selector */}
-              <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: '10px', padding: '0.5rem 0.75rem', border: '1px solid rgba(255,255,255,0.06)' }}>
-                <div style={{ fontSize: '0.68rem', color: '#64748b', marginBottom: '0.3rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>AI Engine</div>
-                <select 
-                  value={engine} 
-                  onChange={(e) => setEngine(e.target.value)}
-                  style={{ background: 'transparent', border: 'none', color: '#f1f5f9', outline: 'none', fontSize: '0.85rem', width: '100%', cursor: 'pointer' }}
-                >
-                  <option value="groq" style={{ background: '#0f172a' }}>⚡ Groq (Llama 3)</option>
-                  <option value="openrouter" style={{ background: '#0f172a' }}>🔀 OpenRouter</option>
-                  <option value="gemini" style={{ background: '#0f172a' }}>✨ Gemini</option>
-                </select>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                {/* Engine Selector */}
+                <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: '10px', padding: '0.5rem 0.75rem', border: '1px solid rgba(255,255,255,0.06)' }}>
+                  <div style={{ fontSize: '0.68rem', color: '#64748b', marginBottom: '0.3rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>AI Engine</div>
+                  <select 
+                    value={engine} 
+                    onChange={(e) => setEngine(e.target.value)}
+                    style={{ background: 'transparent', border: 'none', color: '#f1f5f9', outline: 'none', fontSize: '0.85rem', width: '100%', cursor: 'pointer' }}
+                  >
+                    <option value="groq" style={{ background: '#0f172a' }}>⚡ Groq (Llama 3)</option>
+                    <option value="openrouter" style={{ background: '#0f172a' }}>🔀 OpenRouter</option>
+                    <option value="gemini" style={{ background: '#0f172a' }}>✨ Gemini</option>
+                  </select>
+                </div>
+                
+                {/* Mode Toggle */}
+                <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: '10px', padding: '0.5rem 0.75rem', border: '1px solid rgba(255,255,255,0.06)', display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                  <div style={{ fontSize: '0.68rem', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Browser Mode</div>
+                  <button 
+                    onClick={() => setHeadless(!headless)} 
+                    style={{ 
+                      background: 'transparent', border: 'none', color: headless ? '#94a3b8' : '#10b981', 
+                      display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer', fontSize: '0.85rem', padding: 0, fontWeight: 500
+                    }}
+                  >
+                    {headless ? <EyeOff size={14} /> : <Eye size={14} />} {headless ? 'Headless' : 'Headed (Visible)'}
+                  </button>
+                </div>
               </div>
-              
-              {/* Mode Toggle */}
+
+              {/* Local Execution Server URL */}
               <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: '10px', padding: '0.5rem 0.75rem', border: '1px solid rgba(255,255,255,0.06)', display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
-                <div style={{ fontSize: '0.68rem', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Browser Mode</div>
-                <button 
-                  onClick={() => setHeadless(!headless)} 
+                <div style={{ fontSize: '0.68rem', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'flex', justifyContent: 'space-between' }}>
+                  <span>Local Execution Server</span>
+                  {isVercel && <span style={{ color: '#fbbf24', fontSize: '0.65rem', fontWeight: 600 }}>⚠️ Required on Vercel</span>}
+                </div>
+                <input 
+                  type="text" 
+                  value={executionServerUrl} 
+                  onChange={(e) => handleServerUrlChange(e.target.value)}
+                  placeholder="e.g. http://localhost:3001"
                   style={{ 
-                    background: 'transparent', border: 'none', color: headless ? '#94a3b8' : '#10b981', 
-                    display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer', fontSize: '0.85rem', padding: 0, fontWeight: 500
+                    background: 'transparent', border: 'none', borderBottom: '1px solid rgba(255,255,255,0.1)', 
+                    color: '#f1f5f9', outline: 'none', fontSize: '0.83rem', padding: '2px 0', width: '100%' 
                   }}
-                >
-                  {headless ? <EyeOff size={14} /> : <Eye size={14} />} {headless ? 'Headless' : 'Headed (Visible)'}
-                </button>
+                />
               </div>
             </div>
 
             {/* Run/Stop Button */}
-            {isVercel ? (
-              <div style={{
+            <button 
+              onClick={() => isExecuting ? stopExecution() : startAgentExecution(selectedCaseId || null, null)} 
+              style={{ 
                 width: '100%',
                 padding: '0.75rem',
                 borderRadius: '11px',
-                border: '1px solid rgba(245,158,11,0.3)',
-                background: 'rgba(245,158,11,0.06)',
-                color: '#92400e',
-                fontSize: '0.85rem',
-                fontWeight: 500,
+                border: `1px solid ${isExecuting ? '#ef4444' : '#10b981'}`,
+                background: isExecuting 
+                  ? 'linear-gradient(135deg, rgba(239,68,68,0.12), rgba(220,38,38,0.08))' 
+                  : 'linear-gradient(135deg, rgba(16,185,129,0.15), rgba(5,150,105,0.1))',
+                color: isExecuting ? '#ef4444' : '#10b981',
+                fontSize: '0.9rem',
+                fontWeight: 600,
+                cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 gap: '0.5rem',
-                cursor: 'not-allowed',
-                letterSpacing: '0.01em'
-              }}>
-                <span style={{ fontSize: '1rem' }}>🚫</span>
-                Execution requires local server
-              </div>
-            ) : (
-              <button 
-                onClick={() => isExecuting ? stopExecution() : startAgentExecution(selectedCaseId || null, null)} 
-                style={{ 
-                  width: '100%',
-                  padding: '0.75rem',
-                  borderRadius: '11px',
-                  border: `1px solid ${isExecuting ? '#ef4444' : '#10b981'}`,
-                  background: isExecuting 
-                    ? 'linear-gradient(135deg, rgba(239,68,68,0.12), rgba(220,38,38,0.08))' 
-                    : 'linear-gradient(135deg, rgba(16,185,129,0.15), rgba(5,150,105,0.1))',
-                  color: isExecuting ? '#ef4444' : '#10b981',
-                  fontSize: '0.9rem',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '0.5rem',
-                  transition: 'all 0.2s',
-                  letterSpacing: '0.02em'
-                }}
-              >
-                {isExecuting ? <Square size={16} /> : <Bot size={16} />}
-                {isExecuting 
-                  ? `Stop Agent ${executionQueue.length > 0 ? `(${executionQueue.length} queued)` : ''}` 
-                  : 'Run Selected Test Case'
-                }
-              </button>
-            )}
+                transition: 'all 0.2s',
+                letterSpacing: '0.02em'
+              }}
+            >
+              {isExecuting ? <Square size={16} /> : <Bot size={16} />}
+              {isExecuting 
+                ? `Stop Agent ${executionQueue.length > 0 ? `(${executionQueue.length} queued)` : ''}` 
+                : 'Run Selected Test Case'
+              }
+            </button>
           </div>
         </div>
 

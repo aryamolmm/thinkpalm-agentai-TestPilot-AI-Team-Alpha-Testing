@@ -64,6 +64,7 @@ const SettingsPage = ({ credentials, onUpdateCredentials }) => {
   const [activeEngine, setActiveEngine] = useState(credentials?.engine || 'gemini')
   const [showKey, setShowKey] = useState({})
   const [saved, setSaved] = useState(false)
+  const [executionServerUrl, setExecutionServerUrl] = useState('http://localhost:3001')
   
   // QMetry State
   const [qmetrySettings, setQmetrySettings] = useState({ qmetryBaseUrl: '', apiToken: '', projectId: '' })
@@ -86,6 +87,10 @@ const SettingsPage = ({ credentials, onUpdateCredentials }) => {
     if (qSettings) {
       setQmetrySettings(qSettings)
     }
+
+    // Load Execution Server URL
+    const savedUrl = localStorage.getItem('testpilot_execution_server_url')
+    if (savedUrl) setExecutionServerUrl(savedUrl)
   }, [])
 
   const handleSave = () => {
@@ -94,6 +99,9 @@ const SettingsPage = ({ credentials, onUpdateCredentials }) => {
     
     // Save QMetry settings
     saveQMetrySettings(qmetrySettings)
+
+    // Save Execution Server URL
+    localStorage.setItem('testpilot_execution_server_url', executionServerUrl)
     
     // Sync all keys to the parent credentials state
     onUpdateCredentials({ 
@@ -330,6 +338,29 @@ const SettingsPage = ({ credentials, onUpdateCredentials }) => {
                 {qmetryTestStatus.success ? '✓ ' : '✗ '}{qmetryTestStatus.message}
               </span>
             )}
+          </div>
+        </div>
+      </div>
+
+      {/* Test Execution Server Settings */}
+      <div className="glass-card" style={{ padding: '1.5rem', marginBottom: '2rem' }}>
+        <h3 style={{ margin: '0 0 1.2rem', color: '#e2e8f0', fontSize: '1.1rem', display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+          <Cpu size={18} style={{ color: '#818cf8' }} /> Test Execution Server Settings
+        </h3>
+        <p style={{ color: '#94a3b8', margin: '-0.8rem 0 1.2rem', fontSize: '0.85rem' }}>
+          Specify the backend server responsible for running Playwright browser execution.
+        </p>
+        <div>
+          <label style={{ display: 'block', fontSize: '0.85rem', color: '#94a3b8', marginBottom: '0.4rem' }}>Execution Server URL</label>
+          <input 
+            type="text" 
+            value={executionServerUrl} 
+            onChange={e => setExecutionServerUrl(e.target.value)}
+            placeholder="e.g. http://localhost:3001"
+            style={{ width: '100%', padding: '0.75rem', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', color: 'white', fontSize: '0.9rem', boxSizing: 'border-box' }}
+          />
+          <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.4rem' }}>
+            If you are running the frontend on Vercel, point this to your local running backend server (typically <strong>http://localhost:3001</strong>).
           </div>
         </div>
       </div>
