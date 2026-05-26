@@ -1383,6 +1383,11 @@ app.post('/api/ai/rework', async (req, res) => {
 
 // Endpoint to run a Playwright test script
 app.post('/api/test/run', async (req, res) => {
+    if (process.env.VERCEL) {
+      return res.status(400).json({
+        error: "Direct test run execution is not supported in Vercel's serverless environment. Please run the application locally."
+      });
+    }
     const { script, id, tool = 'playwright' } = req.body;
     if (!script) return res.status(400).json({ error: 'No script provided' });
     
@@ -1408,6 +1413,9 @@ app.post('/api/test/run', async (req, res) => {
 });
 
 app.get('/api/browse-folder', async (req, res) => {
+  if (process.env.VERCEL) {
+    return res.json({ path: null, error: "Local folder selection is only supported when running the application locally." });
+  }
   console.log('[Browse] Triggering COM-based Folder Picker...');
   // Use Shell.Application COM object - very reliable on Windows without extra assembly loads
   const command = `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "(New-Object -ComObject Shell.Application).BrowseForFolder(0, 'Select Playwright Project Folder', 0).Self.Path"`;
@@ -1427,6 +1435,11 @@ app.get('/api/browse-folder', async (req, res) => {
 const npxCmd = process.platform === 'win32' ? 'npx.cmd' : 'npx';
 app.post('/api/execute-test', async (req, res) => {
   const { test_case_id, status, comments, script, manual } = req.body;
+  if (process.env.VERCEL && !manual && script) {
+    return res.status(400).json({
+      error: "Automated test execution via Playwright CLI is not supported in Vercel's serverless environment. Please run the application locally."
+    });
+  }
   const startTime = Date.now();
   let newExecution;
 
@@ -1511,6 +1524,11 @@ app.post('/api/execute-test', async (req, res) => {
 });
 
 app.post('/api/run-suite', async (req, res) => {
+  if (process.env.VERCEL) {
+    return res.status(400).json({
+      error: "Playwright test suite execution is not supported in Vercel's serverless environment. Please run the application locally."
+    });
+  }
   const { projectPath, browser, headless, source, gitUrl } = req.body;
   const npxCmd = process.platform === 'win32' ? 'npx.cmd' : 'npx';
   let target = (projectPath || process.cwd()).trim();
@@ -1867,6 +1885,11 @@ const sendAgentUpdate = (id, data) => {
 };
 
 app.post('/api/agent-execute', async (req, res) => {
+  if (process.env.VERCEL) {
+    return res.status(400).json({
+      error: "Live browser execution is not supported in Vercel's serverless environment. Please run the application locally (npm run server) to execute tests."
+    });
+  }
   const { test_case_id, steps, headless = true, engine = 'groq', contextCode = '', userInstructions = '', credentials = {}, envConfig = {} } = req.body;
   const executionId = uuidv4();
   runAgentExecution(executionId, test_case_id, steps, headless, engine, contextCode, userInstructions, credentials, envConfig);

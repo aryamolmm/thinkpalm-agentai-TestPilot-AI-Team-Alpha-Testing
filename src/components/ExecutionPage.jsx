@@ -277,11 +277,33 @@ const ExecutionPage = ({ story, credentials }) => {
     warn: '#f59e0b'
   };
 
+  const isVercel = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '380px 1fr', gap: '1.5rem', height: 'calc(100vh - 140px)' }}>
-      {/* LEFT: STEP EDITOR */}
-      <div style={{ ...glassStyle, display: 'flex', flexDirection: 'column', gap: '1rem', overflowY: 'auto', minWidth: '380px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', height: 'calc(100vh - 140px)' }}>
+      {isVercel && (
+        <div className="glass-card animate-fade-in" style={{ 
+          background: 'rgba(245, 158, 11, 0.08)', 
+          border: '1px solid rgba(245, 158, 11, 0.25)', 
+          borderRadius: '12px', 
+          padding: '1rem 1.5rem', 
+          color: '#fef3c7',
+          fontSize: '0.88rem',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '1rem',
+          boxShadow: '0 4px 20px rgba(0, 0, 0, 0.2)'
+        }}>
+          <span style={{ fontSize: '1.4rem' }}>⚠️</span>
+          <div style={{ lineHeight: '1.5' }}>
+            <strong style={{ color: '#fbbf24', fontSize: '0.92rem' }}>Local Execution Recommended:</strong> Live browser-based test execution is not supported on Vercel's serverless cloud because headless Chrome processes cannot run in serverless containers. To execute live AI agent sequences, please run the project locally (<code style={{ background: 'rgba(0,0,0,0.3)', padding: '2px 6px', borderRadius: '4px', fontFamily: 'monospace' }}>http://localhost:5173</code>) with the local backend running (<code style={{ background: 'rgba(0,0,0,0.3)', padding: '2px 6px', borderRadius: '4px', fontFamily: 'monospace' }}>npm run server</code>).
+          </div>
+        </div>
+      )}
+      <div style={{ display: 'grid', gridTemplateColumns: '380px 1fr', gap: '1.5rem', flex: 1, minHeight: 0 }}>
+        {/* LEFT: STEP EDITOR */}
+        <div style={{ ...glassStyle, display: 'flex', flexDirection: 'column', gap: '1rem', overflowY: 'auto', minWidth: '380px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
           <div>
             <h3 style={{ margin: 0, color: '#f8fafc', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               <FileText size={18} color="#818cf8" /> Agent Execution
@@ -520,6 +542,7 @@ const ExecutionPage = ({ story, credentials }) => {
         .spin-icon { animation: spin 2s linear infinite; }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
       `}</style>
+      </div>
     </div>
   );
 };
