@@ -1,33 +1,30 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  Bot, Play, Square, Terminal, CheckCircle2, XCircle, 
-  Loader2, Image as ImageIcon, Settings, Eye, EyeOff,
-  Plus, Trash2, Edit3, Save, ChevronRight, FileText, Code,
-  ChevronDown, ChevronUp, Globe, User, Lock, Zap
+  Play, Square, Terminal, Globe, User, Lock, 
+  Eye, EyeOff, Loader2, Code, ShieldAlert, Sparkles,
+  FileText, Check, Cpu, Info, CheckCircle2, AlertTriangle,
+  Save
 } from 'lucide-react';
 import axios from 'axios';
 import { API_URLS } from '../services/api';
 
 const ExecutionPage = ({ story, credentials }) => {
-  const [steps, setSteps] = useState([]);
-  const [generatedCases, setGeneratedCases] = useState([]);
-  const [selectedCaseId, setSelectedCaseId] = useState('');
   const [isExecuting, setIsExecuting] = useState(false);
   const [headless, setHeadless] = useState(true);
-  const [engine, setEngine] = useState('groq');
-  const [currentExecution, setCurrentExecution] = useState(null);
   const [logs, setLogs] = useState([]);
-  const [stepStatus, setStepStatus] = useState({}); 
-  const [screenshots, setScreenshots] = useState({}); 
   const [contextCode, setContextCode] = useState('');
   
   const [targetUrl, setTargetUrl] = useState('');
   const [targetUser, setTargetUser] = useState('');
   const [targetPass, setTargetPass] = useState('');
-  const [showWarning, setShowWarning] = useState(true);
-  const [envExpanded, setEnvExpanded] = useState(true);
-  const [caseExpanded, setCaseExpanded] = useState(true);
+  
+  const [generatedCases, setGeneratedCases] = useState([]);
+  const [selectedCaseId, setSelectedCaseId] = useState('');
+  const [browser, setBrowser] = useState('all');
+  const [showCodePreview, setShowCodePreview] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [saved, setSaved] = useState(false);
   
   const [executionServerUrl, setExecutionServerUrl] = useState(() => {
     return localStorage.getItem('testpilot_execution_server_url') || 'http://localhost:3001';
@@ -65,23 +62,24 @@ const ExecutionPage = ({ story, credentials }) => {
   const eventSourceRef = useRef(null);
   const logEndRef = useRef(null);
 
-  // Load Generated Cases and Script
+  // Load Generated Script, Cases, and Env Config
   useEffect(() => {
     if (story?.id) {
-      const storedCases = localStorage.getItem(`testpilot_cases_${story.id}`);
-      if (storedCases) {
-        const parsed = JSON.parse(storedCases);
-        setGeneratedCases(parsed);
-        if (parsed.length > 0) {
-            handleCaseSelect(parsed[0].TC_ID, parsed);
-        }
-      } else {
-        const initialSteps = story.Steps?.split('\n').filter(s => s.trim()) || [];
-        setSteps(initialSteps.map((text, id) => ({ id, text, isEditing: false })));
-      }
-
       const storedScript = localStorage.getItem(`testpilot_script_${story.id}`);
       if (storedScript) setContextCode(storedScript);
+
+      const storedCases = localStorage.getItem(`testpilot_cases_${story.id}`);
+      if (storedCases) {
+        try {
+          const parsed = JSON.parse(storedCases);
+          setGeneratedCases(parsed);
+          if (parsed.length > 0) {
+            setSelectedCaseId(parsed[0].TC_ID || '');
+          }
+        } catch (e) {
+          console.error('Failed to parse generated cases', e);
+        }
+      }
 
       // Load saved environment config for this story
       const savedEnv = localStorage.getItem(`testpilot_env_${story.id}`);
@@ -93,12 +91,11 @@ const ExecutionPage = ({ story, credentials }) => {
           setTargetPass(pass || '');
         } catch (e) {}
       } else {
-        // Fallback: Smart URL auto-detection from story description or BDD steps
+        // Smart URL auto-detection from story description or BDD steps
         let detectedUrl = '';
         const desc = story.description || story.Description || '';
         const stepsText = story.Steps || '';
         
-        // Helper to extract non-placeholder URL
         const extractUrl = (text, ignorePlaceholders = false) => {
           const regex = /(?:https?:\/\/[^\s"']+|www\.[^\s"']+|[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}(?:\/[^\s"']*)?)/gi;
           const matches = text.match(regex) || [];
@@ -129,132 +126,33 @@ const ExecutionPage = ({ story, credentials }) => {
     logEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [logs]);
 
-  const handleCaseSelect = (caseId, sourceCases = generatedCases) => {
-    setSelectedCaseId(caseId);
-    const tc = sourceCases.find(c => c.TC_ID === caseId);
-    if (tc) {
-        let uiSteps = [];
-        if (tc.Precondition || tc.Preconditions) {
-            uiSteps.push(`PRECONDITION: ${tc.Precondition || tc.Preconditions}`);
-        } else {
-            uiSteps.push('No preconditions defined.');
-        }
-        setSteps(uiSteps.map((text, id) => ({ id, text, isEditing: false })));
-    }
-  };
-
-  const addStep = () => {
-    setSteps([...steps, { id: Date.now(), text: 'New Step', isEditing: true }]);
-  };
-
-  const removeStep = (id) => {
-    setSteps(steps.filter(s => s.id !== id));
-  };
-
-  const updateStepText = (id, text) => {
-    setSteps(steps.map(s => s.id === id ? { ...s, text } : s));
-  };
-
-  const toggleEdit = (id) => {
-    setSteps(steps.map(s => s.id === id ? { ...s, isEditing: !s.isEditing } : s));
-  };
-
-  const [executionQueue, setExecutionQueue] = useState([]);
-  const [runningTcId, setRunningTcId] = useState('');
-  const isTransitioningRef = useRef(false);
-
-  useEffect(() => {
-    if (!isExecuting && executionQueue.length > 0 && !isTransitioningRef.current) {
-      isTransitioningRef.current = true;
-      const nextTcId = executionQueue[0];
-      
-      const tc = generatedCases.find(c => c.TC_ID === nextTcId);
-      if (tc) {
-        setRunningTcId(nextTcId);
-        setExecutionQueue(prev => prev.slice(1));
-        
-        let allSteps = [];
-        if (tc.Precondition || tc.Preconditions) {
-            allSteps.push(`PRECONDITION: ${tc.Precondition || tc.Preconditions}`);
-        }
-        const rawSteps = tc.Gherkin || tc.Steps || tc.Scenario || '';
-        const parsedSteps = rawSteps.split('\n')
-            .filter(s => s.trim())
-            .filter(s => !s.trim().toLowerCase().startsWith('scenario:'))
-            .map(s => s.trim());
-        allSteps = [...allSteps, ...parsedSteps];
-        
-        handleCaseSelect(nextTcId);
-        
-        setIsExecuting(true);
-        setTimeout(() => {
-           startAgentExecution(nextTcId, allSteps);
-           isTransitioningRef.current = false;
-        }, 1000);
-      } else {
-        setExecutionQueue(prev => prev.slice(1));
-        isTransitioningRef.current = false;
-      }
-    } else if (!isExecuting && executionQueue.length === 0) {
-      setRunningTcId('');
-    }
-  }, [isExecuting, executionQueue, generatedCases]);
-
-  const runAllSequential = () => {
-    if (generatedCases.length === 0) return;
-    const allIds = generatedCases.map(c => c.TC_ID);
-    setExecutionQueue(allIds);
-  };
-
-  const startAgentExecution = async (tcIdOverride = null, stepsOverride = null) => {
+  const startExecution = async () => {
+    if (!contextCode) return;
     setIsExecuting(true);
     setLogs([]);
-    setStepStatus({});
-    setScreenshots({});
     
     try {
-      const activeTcId = tcIdOverride || selectedCaseId || story.id;
-      const tc = generatedCases.find(c => c.TC_ID === activeTcId);
-      
-      let finalSteps = [];
-      const uiSteps = steps.map(s => s.text);
-      
-      if (stepsOverride) {
-          finalSteps = stepsOverride;
-      } else if (tc) {
-          const rawBdd = tc.Gherkin || tc.Steps || tc.Scenario || '';
-          const bddSteps = rawBdd.split('\n')
-              .filter(s => s.trim())
-              .filter(s => !s.trim().toLowerCase().startsWith('scenario:'))
-              .map(s => s.trim());
-          finalSteps = [...uiSteps, ...bddSteps];
-      } else {
-          finalSteps = uiSteps;
-      }
-
-      const storedInstruction = localStorage.getItem(`testpilot_instruction_${story.id}`);
-      const fallbackInstruction = localStorage.getItem('testpilot_ai_memory') || '';
+      const activeTcId = selectedCaseId || story.id;
       
       const resp = await axios.post(API_URLS.AGENT_EXECUTE, {
         test_case_id: activeTcId,
-        steps: finalSteps,
+        steps: [],
         headless,
-        engine,
+        browser,
         contextCode,
-        userInstructions: storedInstruction || story.Description || fallbackInstruction || '',
         credentials,
-        envConfig: { url: targetUrl, user: targetUser, pass: targetPass }
+        envConfig: { url: targetUrl, user: targetUser, pass: targetPass },
+        mode: 'codegen'
       });
 
       const { executionId } = resp.data;
-      setCurrentExecution(executionId);
       setupStream(executionId, activeTcId);
     } catch (err) {
       let errMsg = err.message;
       if (err.message === 'Network Error' || !err.response) {
         errMsg = `Could not connect to local execution server at ${executionServerUrl}. Make sure 'npm run server' is running on your machine.`;
       }
-      addLog(`❌ Failed to start agent: ${errMsg}`, 'error');
+      addLog(`❌ Failed to start execution: ${errMsg}`, 'error');
       setIsExecuting(false);
     }
   };
@@ -279,41 +177,29 @@ const ExecutionPage = ({ story, credentials }) => {
   const handleAgentEvent = (data, tcId) => {
     switch (data.type) {
       case 'STEP_START':
-        setStepStatus(prev => ({ ...prev, [data.index]: 'running' }));
         addLog(`🚀 Starting: ${data.step}`, 'info');
         break;
-      case 'TOOL_CALL':
-        addLog(`🛠️ Tool: ${data.name} (${JSON.stringify(data.args)})`, 'tool');
-        break;
-      case 'OBSERVATION':
-        addLog(`👁️ Obs: ${data.observation}`, 'obs');
-        break;
-      case 'SCREENSHOT':
-        setScreenshots(prev => {
-            const stepIdx = Object.keys(stepStatus).find(k => stepStatus[k] === 'running');
-            return { ...prev, [stepIdx]: [...(prev[stepIdx] || []), data.filename] };
-        });
+      case 'CLI_LOG':
+        addLog(data.text, data.logType || 'info');
         break;
       case 'STEP_COMPLETE':
-        setStepStatus(prev => ({ ...prev, [data.index]: 'completed' }));
-        addLog(`✅ Step ${data.index + 1} finished`, 'success');
+        addLog(`✅ Task finished successfully`, 'success');
         break;
       case 'STEP_FAILED':
-        setStepStatus(prev => ({ ...prev, [data.index]: 'failed' }));
-        addLog(`❌ Step ${data.index + 1} failed`, 'error');
+        addLog(`❌ Task failed`, 'error');
         break;
       case 'EXECUTION_COMPLETE':
         setIsExecuting(false);
-        addLog(`🏁 Execution Finished: ${data.status} ${data.error ? '(' + data.error + ')' : ''}`, data.status === 'Success' ? 'success' : 'error');
+        addLog(`🏁 Playwright Run Finished: ${data.status} ${data.error ? '(' + data.error + ')' : ''}`, data.status === 'Success' ? 'success' : 'error');
         eventSourceRef.current?.close();
         
         axios.post(API_URLS.EXECUTE_TEST, {
           test_case_id: tcId,
           status: data.status === 'Success' ? 'Pass' : 'Fail',
-          comments: `AI Agent execution finished with status: ${data.status}`,
+          comments: `Playwright CLI execution finished with status: ${data.status}`,
           manual: false,
           storyKey: story?.key
-        }).catch(err => console.error('Failed to save AI report', err));
+        }).catch(err => console.error('Failed to save execution report', err));
         break;
       case 'ERROR':
         addLog(`⚠️ Error: ${data.error}`, 'error');
@@ -322,13 +208,34 @@ const ExecutionPage = ({ story, credentials }) => {
   };
 
   const addLog = (text, type) => {
-    setLogs(prev => [...prev, { id: Date.now(), text, type, time: new Date().toLocaleTimeString() }]);
+    setLogs(prev => [...prev, { id: Date.now() + Math.random(), text, type, time: new Date().toLocaleTimeString() }]);
   };
 
   const stopExecution = () => {
     eventSourceRef.current?.close();
     setIsExecuting(false);
     addLog('🛑 Execution stopped by user', 'warn');
+    axios.post(API_URLS.STOP_EXECUTION, {
+      test_case_id: selectedCaseId || story.id
+    }).catch(err => console.error('Failed to stop execution on server', err));
+  };
+
+  const clearLogs = () => {
+    setLogs([]);
+  };
+
+  const copyCode = () => {
+    navigator.clipboard.writeText(contextCode);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const manualSave = () => {
+    if (story?.id) {
+      localStorage.setItem(`testpilot_script_${story.id}`, contextCode);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    }
   };
 
   const logColors = {
@@ -340,421 +247,209 @@ const ExecutionPage = ({ story, credentials }) => {
     warn: '#f59e0b'
   };
 
-  const isVercel = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', height: 'calc(100vh - 140px)', overflow: 'hidden' }}>
       
-      {/* Top Warning Banner */}
-      {isVercel && (
-        <div style={{ 
-          background: 'linear-gradient(135deg, rgba(99,102,241,0.1), rgba(16,185,129,0.08))', 
-          border: '1px solid rgba(99,102,241,0.2)', 
-          borderRadius: '10px', 
-          padding: '0.65rem 1.2rem', 
-          color: '#e2e8f0',
-          fontSize: '0.82rem',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: '1rem',
-          flexShrink: 0
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', flex: 1 }}>
-            <span style={{ fontSize: '1rem' }}>🌐</span>
-            <span>
-              <strong style={{ color: '#818cf8' }}>Vercel Deployment Mode: </strong>
-              To execute tests in your local browser (headed/headless), start the backend server locally:
-              <code style={{ background: 'rgba(0,0,0,0.35)', padding: '1px 6px', borderRadius: '3px', marginLeft: '4px' }}>npm run server</code>
-              {' '}and configure the local server URL below.
-            </span>
-          </div>
+      {/* Header Info */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
+        <div>
+          <h1 className="title-gradient" style={{ margin: 0, fontSize: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <Sparkles size={20} color="#818cf8" /> Automation Execution Workspace
+          </h1>
+          <p style={{ color: '#94a3b8', margin: '0.1rem 0 0', fontSize: '0.8rem' }}>
+            Configure preconditions, monitor integration states, and run Playwright CLI tests using custom CodeGen scripts
+          </p>
         </div>
-      )}
+      </div>
 
-      {/* Main 2-column Layout */}
+      {/* Main 3-Column Grid Layout */}
       <div style={{ 
         display: 'grid', 
-        gridTemplateColumns: '420px 1fr', 
-        gap: '1.25rem', 
+        gridTemplateColumns: '320px 1fr 1fr', 
+        gap: '1rem', 
         flex: 1, 
         minHeight: 0,
         overflow: 'hidden'
       }}>
         
-        {/* ===== LEFT PANEL ===== */}
+        {/* ===== COLUMN 1: CONFIGURATION ===== */}
         <div style={{ 
           display: 'flex', 
           flexDirection: 'column', 
           gap: '0.85rem',
+          background: 'rgba(15, 23, 42, 0.65)',
+          backdropFilter: 'blur(12px)',
+          borderRadius: '16px',
+          border: '1px solid rgba(255,255,255,0.06)',
+          padding: '1.1rem',
+          height: '100%',
           overflowY: 'auto',
-          paddingRight: '4px',
-          height: '100%'
+          boxSizing: 'border-box'
         }}>
           
-          {/* Header Row */}
-          <div style={{ 
-            background: 'rgba(15,23,42,0.7)', 
-            backdropFilter: 'blur(12px)', 
-            borderRadius: '14px', 
-            border: '1px solid rgba(99,102,241,0.15)', 
-            padding: '1rem 1.2rem',
-            flexShrink: 0
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-              <div>
-                <h3 style={{ margin: 0, color: '#f8fafc', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '1rem' }}>
-                  <FileText size={17} color="#818cf8" /> Agent Execution
-                </h3>
-                <p style={{ margin: '0.2rem 0 0', color: '#64748b', fontSize: '0.78rem' }}>Configure and run AI-driven test sequences</p>
-              </div>
-              <div style={{ display: 'flex', gap: '0.5rem', flexShrink: 0 }}>
-                <button 
-                  onClick={runAllSequential} 
-                  disabled={isExecuting || generatedCases.length === 0} 
-                  style={{ 
-                    background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.3)', 
-                    color: '#10b981', padding: '0.4rem 0.75rem', borderRadius: '8px', 
-                    fontSize: '0.73rem', cursor: isExecuting ? 'not-allowed' : 'pointer', 
-                    display: 'flex', alignItems: 'center', gap: '0.35rem', opacity: isExecuting ? 0.5 : 1 
-                  }}
-                >
-                  <Play size={12} /> Run All
-                </button>
-                <button 
-                  onClick={addStep} 
-                  style={{ 
-                    background: 'rgba(129,140,248,0.1)', border: '1px solid rgba(129,140,248,0.3)', 
-                    color: '#818cf8', padding: '0.4rem 0.75rem', borderRadius: '8px', 
-                    fontSize: '0.73rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.35rem' 
-                  }}
-                >
-                  <Plus size={12} /> Add Step
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Test Case Selector */}
-          <div style={{ 
-            background: 'rgba(15,23,42,0.7)', 
-            backdropFilter: 'blur(12px)', 
-            borderRadius: '14px', 
-            border: '1px solid rgba(255,255,255,0.06)', 
-            overflow: 'hidden',
-            flexShrink: 0
-          }}>
-            <div 
-              onClick={() => setCaseExpanded(!caseExpanded)}
+          {/* Test Case Selection */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+            <span style={{ fontSize: '0.7rem', color: '#818cf8', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+              <FileText size={12} /> Select Test Case
+            </span>
+            <select 
+              value={selectedCaseId} 
+              onChange={(e) => setSelectedCaseId(e.target.value)}
               style={{ 
-                display: 'flex', justifyContent: 'space-between', alignItems: 'center', 
-                padding: '0.75rem 1.1rem', cursor: 'pointer',
-                background: 'rgba(99,102,241,0.04)',
-                borderBottom: caseExpanded ? '1px solid rgba(255,255,255,0.04)' : 'none'
+                width: '100%', background: 'rgba(0,0,0,0.3)', 
+                border: '1px solid rgba(99,102,241,0.25)', color: '#f1f5f9', 
+                outline: 'none', fontSize: '0.82rem', padding: '0.5rem 0.75rem', 
+                borderRadius: '8px', cursor: 'pointer',
+                boxSizing: 'border-box'
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <Zap size={13} color="#6366f1" />
-                <span style={{ fontSize: '0.72rem', color: '#6366f1', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                  Select Test Case
-                </span>
+              {generatedCases.length > 0 ? (
+                generatedCases.map(tc => (
+                  <option key={tc.TC_ID} value={tc.TC_ID} style={{ background: '#0f172a' }}>
+                    {tc.TC_ID}: {tc.Title || tc['Test Case Title'] || tc.Scenario?.split('\n')[0]?.slice(0, 30)}
+                  </option>
+                ))
+              ) : (
+                <option value="" style={{ background: '#0f172a' }}>Default Story Test</option>
+              )}
+            </select>
+          </div>
+
+          <hr style={{ border: 'none', borderBottom: '1px solid rgba(255,255,255,0.05)', margin: '0.2rem 0' }} />
+
+          {/* Form Fields */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+            
+            {/* Target URL */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+              <span style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.03em' }}>Application URL</span>
+              <div style={{ position: 'relative' }}>
+                <Globe size={12} color="#475569" style={{ position: 'absolute', left: '0.7rem', top: '50%', transform: 'translateY(-50%)' }} />
+                <input 
+                  type="text" 
+                  placeholder="e.g. http://192.168.1.1/login" 
+                  value={targetUrl}
+                  onChange={(e) => handleTargetUrlChange(e.target.value)}
+                  style={{ 
+                    width: '100%', background: 'rgba(0,0,0,0.25)', 
+                    border: '1px solid rgba(255,255,255,0.07)', color: '#f1f5f9', 
+                    padding: '0.55rem 0.7rem 0.55rem 2.1rem', borderRadius: '8px', 
+                    fontSize: '0.8rem', outline: 'none', boxSizing: 'border-box',
+                    transition: 'border-color 0.2s'
+                  }}
+                />
               </div>
-              {caseExpanded ? <ChevronUp size={14} color="#6366f1" /> : <ChevronDown size={14} color="#6366f1" />}
             </div>
-            {caseExpanded && (
-              <div style={{ padding: '0.85rem 1.1rem' }}>
-                <select 
-                    value={selectedCaseId} 
-                    onChange={(e) => handleCaseSelect(e.target.value)}
-                    style={{ 
-                      width: '100%', background: 'rgba(0,0,0,0.25)', 
-                      border: '1px solid rgba(99,102,241,0.2)', color: '#f1f5f9', 
-                      outline: 'none', fontSize: '0.85rem', padding: '0.55rem 0.8rem', 
-                      borderRadius: '9px', cursor: 'pointer',
-                      boxSizing: 'border-box'
-                    }}
+
+            {/* Username */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+              <span style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.03em' }}>Username</span>
+              <div style={{ position: 'relative' }}>
+                <User size={12} color="#475569" style={{ position: 'absolute', left: '0.7rem', top: '50%', transform: 'translateY(-50%)' }} />
+                <input 
+                  type="text" 
+                  placeholder="Username / Email" 
+                  value={targetUser}
+                  onChange={(e) => handleTargetUserChange(e.target.value)}
+                  style={{ 
+                    width: '100%', background: 'rgba(0,0,0,0.25)', 
+                    border: '1px solid rgba(255,255,255,0.07)', color: '#f1f5f9', 
+                    padding: '0.55rem 0.7rem 0.55rem 2.1rem', borderRadius: '8px', 
+                    fontSize: '0.8rem', outline: 'none', boxSizing: 'border-box'
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Password */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+              <span style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.03em' }}>Password</span>
+              <div style={{ position: 'relative' }}>
+                <Lock size={12} color="#475569" style={{ position: 'absolute', left: '0.7rem', top: '50%', transform: 'translateY(-50%)' }} />
+                <input 
+                  type="password" 
+                  placeholder="Password" 
+                  value={targetPass}
+                  onChange={(e) => handleTargetPassChange(e.target.value)}
+                  style={{ 
+                    width: '100%', background: 'rgba(0,0,0,0.25)', 
+                    border: '1px solid rgba(255,255,255,0.07)', color: '#f1f5f9', 
+                    padding: '0.55rem 0.7rem 0.55rem 2.1rem', borderRadius: '8px', 
+                    fontSize: '0.8rem', outline: 'none', boxSizing: 'border-box'
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Visibility & Execution Server Toggles */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.1rem' }}>
+              
+              <div style={{ 
+                background: 'rgba(255,255,255,0.015)', 
+                borderRadius: '8px', 
+                padding: '0.5rem 0.7rem', 
+                border: '1px solid rgba(255,255,255,0.03)',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center'
+              }}>
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                  <span style={{ fontSize: '0.72rem', color: '#e2e8f0', fontWeight: 500 }}>Browser Visibility</span>
+                  <span style={{ fontSize: '0.6rem', color: '#64748b' }}>Show browser during CLI execution</span>
+                </div>
+                <button 
+                  onClick={() => setHeadless(!headless)} 
+                  style={{ 
+                    background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', 
+                    color: headless ? '#94a3b8' : '#10b981', borderRadius: '6px',
+                    display: 'flex', alignItems: 'center', gap: '0.3rem', cursor: 'pointer', 
+                    fontSize: '0.7rem', padding: '0.3rem 0.55rem', fontWeight: 600,
+                    transition: 'all 0.2s'
+                  }}
                 >
-                    <option value="" disabled style={{ background: '#0f172a' }}>Choose a test case...</option>
-                    {generatedCases.length > 0 ? (
-                        generatedCases.map(tc => (
-                            <option key={tc.TC_ID} value={tc.TC_ID} style={{ background: '#0f172a' }}>
-                                {tc.TC_ID}: {tc.Title || tc['Test Case Title'] || tc.Scenario?.split('\n')[0]?.slice(0, 45)}
-                            </option>
-                        ))
-                    ) : (
-                        <option value="manual" style={{ background: '#0f172a' }}>Story Default Steps</option>
-                    )}
+                  {headless ? <EyeOff size={11} /> : <Eye size={11} />} {headless ? 'Headless' : 'Headed'}
+                </button>
+              </div>
+
+              {/* Browser Selector */}
+              <div style={{ 
+                background: 'rgba(255,255,255,0.015)', 
+                borderRadius: '8px', 
+                padding: '0.5rem 0.7rem', 
+                border: '1px solid rgba(255,255,255,0.03)',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '0.2rem'
+              }}>
+                <span style={{ fontSize: '0.72rem', color: '#e2e8f0', fontWeight: 500 }}>Target Browser Project</span>
+                <select 
+                  value={browser} 
+                  onChange={(e) => setBrowser(e.target.value)}
+                  style={{ 
+                    width: '100%', background: 'rgba(0,0,0,0.3)', 
+                    border: '1px solid rgba(255,255,255,0.08)', color: '#f1f5f9', 
+                    outline: 'none', fontSize: '0.75rem', padding: '0.35rem 0.6rem', 
+                    borderRadius: '6px', cursor: 'pointer',
+                    boxSizing: 'border-box'
+                  }}
+                >
+                  <option value="all" style={{ background: '#0f172a' }}>All Browsers (Sequential)</option>
+                  <option value="chromium" style={{ background: '#0f172a' }}>Chromium (Chrome)</option>
+                  <option value="firefox" style={{ background: '#0f172a' }}>Firefox</option>
+                  <option value="webkit" style={{ background: '#0f172a' }}>Webkit (Safari)</option>
                 </select>
               </div>
-            )}
-          </div>
 
-          {/* Target Environment */}
-          <div style={{ 
-            background: 'rgba(15,23,42,0.7)', 
-            backdropFilter: 'blur(12px)', 
-            borderRadius: '14px', 
-            border: '1px solid rgba(255,255,255,0.06)', 
-            overflow: 'hidden',
-            flexShrink: 0
-          }}>
-            <div 
-              onClick={() => setEnvExpanded(!envExpanded)}
-              style={{ 
-                display: 'flex', justifyContent: 'space-between', alignItems: 'center', 
-                padding: '0.75rem 1.1rem', cursor: 'pointer',
-                background: 'rgba(16,185,129,0.04)',
-                borderBottom: envExpanded ? '1px solid rgba(255,255,255,0.04)' : 'none'
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <Globe size={13} color="#10b981" />
-                <span style={{ fontSize: '0.72rem', color: '#10b981', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                  Target Environment
-                </span>
-              </div>
-              {envExpanded ? <ChevronUp size={14} color="#10b981" /> : <ChevronDown size={14} color="#10b981" />}
-            </div>
-            {envExpanded && (
-              <div style={{ padding: '0.85rem 1.1rem', display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
-                <div style={{ position: 'relative' }}>
-                  <Globe size={13} color="#475569" style={{ position: 'absolute', left: '0.7rem', top: '50%', transform: 'translateY(-50%)' }} />
-                  <input 
-                      type="text" 
-                      placeholder="Application URL (e.g., http://192.168.1.1/login)" 
-                      value={targetUrl}
-                      onChange={(e) => handleTargetUrlChange(e.target.value)}
-                      style={{ 
-                        width: '100%', background: 'rgba(0,0,0,0.2)', 
-                        border: '1px solid rgba(255,255,255,0.07)', color: '#f1f5f9', 
-                        padding: '0.55rem 0.8rem 0.55rem 2.2rem', borderRadius: '9px', 
-                        fontSize: '0.83rem', outline: 'none', boxSizing: 'border-box'
-                      }}
-                  />
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.6rem' }}>
-                  <div style={{ position: 'relative' }}>
-                    <User size={13} color="#475569" style={{ position: 'absolute', left: '0.7rem', top: '50%', transform: 'translateY(-50%)' }} />
-                    <input 
-                        type="text" 
-                        placeholder="Username" 
-                        value={targetUser}
-                        onChange={(e) => handleTargetUserChange(e.target.value)}
-                        style={{ 
-                          width: '100%', background: 'rgba(0,0,0,0.2)', 
-                          border: '1px solid rgba(255,255,255,0.07)', color: '#f1f5f9', 
-                          padding: '0.55rem 0.6rem 0.55rem 2.2rem', borderRadius: '9px', 
-                          fontSize: '0.83rem', outline: 'none', boxSizing: 'border-box'
-                        }}
-                    />
-                  </div>
-                  <div style={{ position: 'relative' }}>
-                    <Lock size={13} color="#475569" style={{ position: 'absolute', left: '0.7rem', top: '50%', transform: 'translateY(-50%)' }} />
-                    <input 
-                        type="password" 
-                        placeholder="Password" 
-                        value={targetPass}
-                        onChange={(e) => handleTargetPassChange(e.target.value)}
-                        style={{ 
-                          width: '100%', background: 'rgba(0,0,0,0.2)', 
-                          border: '1px solid rgba(255,255,255,0.07)', color: '#f1f5f9', 
-                          padding: '0.55rem 0.6rem 0.55rem 2.2rem', borderRadius: '9px', 
-                          fontSize: '0.83rem', outline: 'none', boxSizing: 'border-box'
-                        }}
-                    />
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Execution Steps */}
-          <div style={{ 
-            background: 'rgba(15,23,42,0.7)', 
-            backdropFilter: 'blur(12px)', 
-            borderRadius: '14px', 
-            border: '1px solid rgba(255,255,255,0.06)', 
-            padding: '0.85rem 1.1rem',
-            flex: '1 1 auto',
-            minHeight: '120px',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '0.6rem'
-          }}>
-            <div style={{ fontSize: '0.72rem', color: '#818cf8', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: '0.4rem', flexShrink: 0 }}>
-              <ChevronRight size={13} /> Execution Steps
-            </div>
-            <div style={{ overflowY: 'auto', flex: 1 }}>
-              <AnimatePresence>
-                {steps.map((step, index) => (
-                  <motion.div 
-                    key={step.id}
-                    initial={{ opacity: 0, x: -16 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, scale: 0.95 }}
-                    style={{ 
-                      background: stepStatus[index] === 'running' 
-                        ? 'rgba(99,102,241,0.08)' 
-                        : 'rgba(255,255,255,0.02)', 
-                      borderRadius: '10px', 
-                      padding: '0.65rem 0.9rem', 
-                      marginBottom: '0.5rem',
-                      border: `1px solid ${
-                        stepStatus[index] === 'running' ? 'rgba(99,102,241,0.4)' : 
-                        stepStatus[index] === 'completed' ? 'rgba(16,185,129,0.2)' : 
-                        stepStatus[index] === 'failed' ? 'rgba(239,68,68,0.2)' : 
-                        'rgba(255,255,255,0.04)'
-                      }`,
-                      display: 'flex',
-                      gap: '0.75rem',
-                      alignItems: 'center',
-                      transition: 'border-color 0.2s'
-                    }}
-                  >
-                    <div style={{ 
-                      width: '22px', height: '22px', borderRadius: '50%', flexShrink: 0,
-                      background: stepStatus[index] === 'completed' ? 'rgba(16,185,129,0.15)' : 
-                                  stepStatus[index] === 'failed' ? 'rgba(239,68,68,0.15)' :
-                                  'rgba(99,102,241,0.15)', 
-                      color: stepStatus[index] === 'completed' ? '#10b981' : 
-                             stepStatus[index] === 'failed' ? '#ef4444' : '#818cf8',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      fontSize: '0.72rem', fontWeight: 700
-                    }}>
-                      {index + 1}
-                    </div>
-                    
-                    <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
-                      {step.isEditing ? (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', width: '100%' }}>
-                          <input 
-                            autoFocus
-                            style={{ 
-                              flex: 1,
-                              minWidth: 0,
-                              background: 'rgba(99,102,241,0.08)', 
-                              border: 'none',
-                              borderBottom: '2px solid #818cf8', 
-                              color: '#f8fafc', 
-                              outline: 'none', 
-                              padding: '4px 6px', 
-                              fontSize: '0.85rem',
-                              borderRadius: '4px 4px 0 0'
-                            }}
-                            value={step.text}
-                            onChange={(e) => updateStepText(step.id, e.target.value)}
-                            onKeyDown={(e) => e.key === 'Enter' && toggleEdit(step.id)}
-                          />
-                          <button 
-                            onClick={() => toggleEdit(step.id)} 
-                            title="Save (Enter)"
-                            style={{ 
-                              background: 'rgba(16,185,129,0.15)', 
-                              border: '1px solid rgba(16,185,129,0.3)', 
-                              color: '#10b981', 
-                              cursor: 'pointer', 
-                              flexShrink: 0,
-                              width: '28px',
-                              height: '28px',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              borderRadius: '6px'
-                            }}
-                          >
-                            <Save size={13} />
-                          </button>
-                        </div>
-                      ) : (
-                        <div 
-                          onClick={() => !isExecuting && toggleEdit(step.id)}
-                          title={isExecuting ? '' : 'Click to edit'}
-                          style={{ color: '#cbd5e1', cursor: isExecuting ? 'default' : 'text', fontSize: '0.85rem', wordBreak: 'break-word', lineHeight: '1.4' }}
-                        >
-                          {step.text}
-                        </div>
-                      )}
-                    </div>
-
-                    <div style={{ display: 'flex', gap: '0.3rem', alignItems: 'center', flexShrink: 0 }}>
-                      {stepStatus[index] === 'completed' && <CheckCircle2 size={15} color="#10b981" />}
-                      {stepStatus[index] === 'failed' && <XCircle size={15} color="#ef4444" />}
-                      {stepStatus[index] === 'running' && <Loader2 size={15} color="#818cf8" className="spin-icon" />}
-                      {!isExecuting && (
-                        <button onClick={() => removeStep(step.id)} style={{ background: 'transparent', border: 'none', color: '#334155', cursor: 'pointer', marginLeft: '0.2rem', display: 'flex', alignItems: 'center' }}>
-                          <Trash2 size={13} />
-                        </button>
-                      )}
-                    </div>
-                  </motion.div>
-                ))}
-              </AnimatePresence>
-            </div>
-          </div>
-
-          {/* Context Info */}
-          {contextCode && (
-            <div style={{ 
-              fontSize: '0.75rem', color: '#10b981', 
-              background: 'rgba(16,185,129,0.06)', 
-              padding: '0.5rem 0.85rem', borderRadius: '9px', 
-              display: 'flex', alignItems: 'center', gap: '0.5rem',
-              border: '1px solid rgba(16,185,129,0.1)',
-              flexShrink: 0
-            }}>
-              <Code size={13} /> Automation context loaded — agent will use it for selector hints.
-            </div>
-          )}
-
-          {/* Engine + Mode + Run Button */}
-          <div style={{ 
-            background: 'rgba(15,23,42,0.7)', 
-            backdropFilter: 'blur(12px)', 
-            borderRadius: '14px', 
-            border: '1px solid rgba(255,255,255,0.06)', 
-            padding: '0.9rem 1.1rem',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '0.75rem',
-            flexShrink: 0
-          }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
-                {/* Engine Selector */}
-                <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: '10px', padding: '0.5rem 0.75rem', border: '1px solid rgba(255,255,255,0.06)' }}>
-                  <div style={{ fontSize: '0.68rem', color: '#64748b', marginBottom: '0.3rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>AI Engine</div>
-                  <select 
-                    value={engine} 
-                    onChange={(e) => setEngine(e.target.value)}
-                    style={{ background: 'transparent', border: 'none', color: '#f1f5f9', outline: 'none', fontSize: '0.85rem', width: '100%', cursor: 'pointer' }}
-                  >
-                    <option value="groq" style={{ background: '#0f172a' }}>⚡ Groq (Llama 3)</option>
-                    <option value="openrouter" style={{ background: '#0f172a' }}>🔀 OpenRouter</option>
-                    <option value="gemini" style={{ background: '#0f172a' }}>✨ Gemini</option>
-                  </select>
-                </div>
-                
-                {/* Mode Toggle */}
-                <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: '10px', padding: '0.5rem 0.75rem', border: '1px solid rgba(255,255,255,0.06)', display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
-                  <div style={{ fontSize: '0.68rem', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Browser Mode</div>
-                  <button 
-                    onClick={() => setHeadless(!headless)} 
-                    style={{ 
-                      background: 'transparent', border: 'none', color: headless ? '#94a3b8' : '#10b981', 
-                      display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer', fontSize: '0.85rem', padding: 0, fontWeight: 500
-                    }}
-                  >
-                    {headless ? <EyeOff size={14} /> : <Eye size={14} />} {headless ? 'Headless' : 'Headed (Visible)'}
-                  </button>
-                </div>
-              </div>
-
-              {/* Local Execution Server URL */}
-              <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: '10px', padding: '0.5rem 0.75rem', border: '1px solid rgba(255,255,255,0.06)', display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
-                <div style={{ fontSize: '0.68rem', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'flex', justifyContent: 'space-between' }}>
-                  <span>Local Execution Server</span>
-                  {isVercel && <span style={{ color: '#fbbf24', fontSize: '0.65rem', fontWeight: 600 }}>⚠️ Required on Vercel</span>}
-                </div>
+              <div style={{ 
+                background: 'rgba(255,255,255,0.015)', 
+                borderRadius: '8px', 
+                padding: '0.5rem 0.7rem', 
+                border: '1px solid rgba(255,255,255,0.03)',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '0.2rem'
+              }}>
+                <span style={{ fontSize: '0.72rem', color: '#e2e8f0', fontWeight: 500 }}>Local Execution Server</span>
                 <input 
                   type="text" 
                   value={executionServerUrl} 
@@ -762,138 +457,344 @@ const ExecutionPage = ({ story, credentials }) => {
                   placeholder="e.g. http://localhost:3001"
                   style={{ 
                     background: 'transparent', border: 'none', borderBottom: '1px solid rgba(255,255,255,0.1)', 
-                    color: '#f1f5f9', outline: 'none', fontSize: '0.83rem', padding: '2px 0', width: '100%' 
+                    color: '#94a3b8', outline: 'none', fontSize: '0.75rem', padding: '1px 0', width: '100%' 
                   }}
                 />
               </div>
+
             </div>
 
-            {/* Run/Stop Button */}
-            <button 
-              onClick={() => isExecuting ? stopExecution() : startAgentExecution(selectedCaseId || null, null)} 
-              style={{ 
-                width: '100%',
-                padding: '0.75rem',
-                borderRadius: '11px',
-                border: `1px solid ${isExecuting ? '#ef4444' : '#10b981'}`,
-                background: isExecuting 
-                  ? 'linear-gradient(135deg, rgba(239,68,68,0.12), rgba(220,38,38,0.08))' 
-                  : 'linear-gradient(135deg, rgba(16,185,129,0.15), rgba(5,150,105,0.1))',
-                color: isExecuting ? '#ef4444' : '#10b981',
-                fontSize: '0.9rem',
-                fontWeight: 600,
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '0.5rem',
-                transition: 'all 0.2s',
-                letterSpacing: '0.02em'
-              }}
-            >
-              {isExecuting ? <Square size={16} /> : <Bot size={16} />}
-              {isExecuting 
-                ? `Stop Agent ${executionQueue.length > 0 ? `(${executionQueue.length} queued)` : ''}` 
-                : 'Run Selected Test Case'
-              }
-            </button>
           </div>
+
+          <div style={{ flex: 1 }} />
+
+          {/* Warning banner when Script is missing */}
+          {!contextCode && (
+            <div style={{ 
+              background: 'rgba(239, 68, 68, 0.08)',
+              border: '1px solid rgba(239, 68, 68, 0.18)',
+              borderRadius: '8px',
+              padding: '0.55rem 0.75rem',
+              display: 'flex',
+              gap: '0.5rem',
+              alignItems: 'flex-start',
+              flexShrink: 0
+            }}>
+              <ShieldAlert size={14} color="#ef4444" style={{ marginTop: '1px', flexShrink: 0 }} />
+              <div style={{ fontSize: '0.7rem', color: '#fca5a5', lineHeight: 1.35 }}>
+                <strong>No script generated:</strong> Go to the <strong>Automation Scripts</strong> page and generate the script first.
+              </div>
+            </div>
+          )}
+
+          {/* Action button */}
+          <button 
+            onClick={() => isExecuting ? stopExecution() : startExecution()} 
+            disabled={!contextCode && !isExecuting}
+            style={{ 
+              width: '100%',
+              padding: '0.65rem',
+              borderRadius: '9px',
+              border: `1px solid ${isExecuting ? '#ef4444' : (!contextCode ? 'rgba(255,255,255,0.05)' : '#10b981')}`,
+              background: isExecuting 
+                ? 'linear-gradient(135deg, rgba(239,68,68,0.12), rgba(220,38,38,0.08))' 
+                : (!contextCode 
+                    ? 'rgba(255,255,255,0.02)'
+                    : 'linear-gradient(135deg, rgba(16,185,129,0.15), rgba(5,150,105,0.1))'),
+              color: isExecuting ? '#ef4444' : (!contextCode ? '#475569' : '#10b981'),
+              fontSize: '0.82rem',
+              fontWeight: 600,
+              cursor: (!contextCode && !isExecuting) ? 'not-allowed' : 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '0.4rem',
+              transition: 'all 0.2s',
+              letterSpacing: '0.02em',
+              opacity: (!contextCode && !isExecuting) ? 0.6 : 1,
+              flexShrink: 0,
+              boxShadow: isExecuting ? '0 0 12px rgba(239,68,68,0.08)' : (!contextCode ? 'none' : '0 0 12px rgba(16,185,129,0.08)')
+            }}
+          >
+            {isExecuting ? <Square size={13} /> : <Play size={13} />}
+            {isExecuting ? 'Stop Execution' : 'Run Automation Script (CodeGen)'}
+          </button>
         </div>
 
-        {/* ===== RIGHT PANEL: LIVE AGENT LOGS ===== */}
+        {/* ===== COLUMN 2: CODEGEN INTEGRATION (CIRCULAR ENGINE) ===== */}
         <div style={{ 
-          background: 'rgba(8,12,28,0.85)', 
+          display: 'flex', 
+          flexDirection: 'column', 
+          gap: '1rem',
+          background: 'rgba(15, 23, 42, 0.65)',
+          backdropFilter: 'blur(12px)',
+          borderRadius: '16px',
+          border: '1px solid rgba(255,255,255,0.06)',
+          padding: '1.25rem',
+          height: '100%',
+          alignItems: 'center',
+          justifyContent: 'center',
+          boxSizing: 'border-box',
+          position: 'relative'
+        }}>
+          {/* Header */}
+          <div style={{ position: 'absolute', top: '1.25rem', left: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <Cpu size={15} color="#818cf8" />
+            <span style={{ fontSize: '0.85rem', color: '#f8fafc', fontWeight: 600 }}>CodeGen Integration</span>
+          </div>
+
+          {/* Glowing Circular Hub */}
+          <div style={{ position: 'relative', width: '180px', height: '180px', display: 'flex', alignItems: 'center', justifyItems: 'center', justifyContent: 'center' }}>
+            
+            {/* Pulsing Dotted Outer Rings */}
+            <div style={{ 
+              position: 'absolute', width: '100%', height: '100%', borderRadius: '50%', 
+              border: `2px dashed ${contextCode ? '#10b981' : '#ef4444'}`,
+              animation: 'spin 15s linear infinite', opacity: 0.35
+            }} />
+            <div style={{ 
+              position: 'absolute', width: '85%', height: '85%', borderRadius: '50%', 
+              border: `1.5px solid ${contextCode ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)'}`,
+              animation: 'pulse 2.2s ease-in-out infinite', opacity: 0.5
+            }} />
+            
+            {/* Core Circle */}
+            <div style={{ 
+              width: '135px', height: '135px', borderRadius: '50%', 
+              background: contextCode 
+                ? 'radial-gradient(circle, rgba(16,185,129,0.12) 0%, rgba(16,185,129,0.01) 100%)' 
+                : 'radial-gradient(circle, rgba(239,68,68,0.12) 0%, rgba(239,68,68,0.01) 100%)',
+              border: `2px solid ${contextCode ? '#10b981' : '#ef4444'}`,
+              boxShadow: contextCode ? '0 0 25px rgba(16,185,129,0.12)' : '0 0 25px rgba(239,68,68,0.12)',
+              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '0.35rem', zIndex: 2
+            }}>
+              <Code size={28} color={contextCode ? '#10b981' : '#ef4444'} />
+              <span style={{ fontSize: '0.72rem', fontWeight: 800, color: contextCode ? '#10b981' : '#ef4444', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                {contextCode ? 'Connected' : 'Missing'}
+              </span>
+              <span style={{ fontSize: '0.55rem', color: '#64748b', fontWeight: 600 }}>
+                {contextCode ? 'Playwright Spec' : 'No Spec Code'}
+              </span>
+            </div>
+          </div>
+
+          {/* Integration Status Properties */}
+          <div style={{ 
+            width: '100%', 
+            background: 'rgba(0,0,0,0.15)', 
+            borderRadius: '10px', 
+            padding: '0.85rem 1rem', 
+            border: '1px solid rgba(255,255,255,0.03)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '0.5rem',
+            marginTop: '0.5rem'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.73rem', borderBottom: '1px solid rgba(255,255,255,0.04)', paddingBottom: '0.35rem' }}>
+              <span style={{ color: '#64748b' }}>Test Suite Type</span>
+              <strong style={{ color: '#e2e8f0' }}>Playwright CLI</strong>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.73rem', borderBottom: '1px solid rgba(255,255,255,0.04)', paddingBottom: '0.35rem' }}>
+              <span style={{ color: '#64748b' }}>Script File Spec</span>
+              <strong style={{ color: '#818cf8', fontFamily: 'monospace' }}>
+                {selectedCaseId ? `tests/tp_${selectedCaseId}.spec.ts` : `tests/tp_${story.id}.spec.ts`}
+              </strong>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.73rem', borderBottom: '1px solid rgba(255,255,255,0.04)', paddingBottom: '0.35rem' }}>
+              <span style={{ color: '#64748b' }}>Target State</span>
+              <strong style={{ color: contextCode ? '#10b981' : '#ef4444', display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
+                {contextCode ? 'Ready' : 'Not Loaded'}
+              </strong>
+            </div>
+          </div>
+
+          {/* Preview code toggle button */}
+          {contextCode && (
+            <button 
+              onClick={() => setShowCodePreview(true)}
+              style={{ 
+                background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)',
+                color: '#818cf8', fontSize: '0.7rem', fontWeight: 600, padding: '0.35rem 0.7rem', borderRadius: '5px',
+                cursor: 'pointer', transition: 'all 0.2s', marginTop: '0.25rem'
+              }}
+              onMouseOver={(e) => { e.target.style.background = 'rgba(99, 102, 241, 0.08)'; }}
+              onMouseOut={(e) => { e.target.style.background = 'rgba(255,255,255,0.03)'; }}
+            >
+              Preview Spec Code
+            </button>
+          )}
+        </div>
+
+        {/* ===== COLUMN 3: TERMINAL LOGS ===== */}
+        <div style={{ 
+          background: 'rgba(8, 12, 28, 0.85)', 
           backdropFilter: 'blur(12px)',
           borderRadius: '16px', 
           border: '1px solid rgba(255,255,255,0.05)', 
-          padding: '1.2rem', 
+          padding: '1.1rem', 
           display: 'flex', 
           flexDirection: 'column', 
-          gap: '1rem', 
+          gap: '0.75rem', 
           minWidth: 0, 
           height: '100%', 
-          overflow: 'hidden' 
+          overflow: 'hidden',
+          boxSizing: 'border-box'
         }}>
           {/* Log Header */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
-            <h3 style={{ margin: 0, color: '#f8fafc', display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '1rem' }}>
-              <Terminal size={17} color="#10b981" /> 
-              Live Agent Log 
-              {runningTcId && (
-                <span style={{ background: 'rgba(99,102,241,0.12)', color: '#818cf8', padding: '2px 10px', borderRadius: '6px', fontSize: '0.7rem', border: '1px solid rgba(99,102,241,0.2)', fontWeight: 600 }}>
-                  {runningTcId}
+            <h3 style={{ margin: 0, color: '#f8fafc', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.92rem', fontWeight: 600 }}>
+              <Terminal size={15} color="#10b981" /> 
+              Terminal Output
+              {isExecuting && (
+                <span style={{ background: 'rgba(16,185,129,0.12)', color: '#10b981', padding: '2px 8px', borderRadius: '50px', fontSize: '0.62rem', border: '1px solid rgba(16,185,129,0.18)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                  <Loader2 size={9} className="spin-icon" /> Run Active
                 </span>
               )}
             </h3>
-            {isExecuting && (
-              <div style={{ fontSize: '0.75rem', color: '#10b981', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <span className="dot-blink" style={{ width: '7px', height: '7px', background: '#10b981', borderRadius: '50%', display: 'inline-block' }} />
-                {runningTcId ? 'Executing Test Case...' : 'Streaming...'}
-              </div>
+            {logs.length > 0 && (
+              <button 
+                onClick={clearLogs}
+                style={{ 
+                  background: 'transparent', border: 'none', color: '#64748b', 
+                  fontSize: '0.68rem', cursor: 'pointer', outline: 'none',
+                  textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 600,
+                  transition: 'color 0.2s'
+                }}
+                onMouseOver={(e) => e.target.style.color = '#cbd5e1'}
+                onMouseOut={(e) => e.target.style.color = '#64748b'}
+              >
+                Clear
+              </button>
             )}
           </div>
 
           {/* Log Terminal */}
           <div style={{ 
-            flex: 1, background: 'rgba(0,0,0,0.4)', borderRadius: '12px', padding: '1rem', 
-            fontFamily: '"Fira Code", "Cascadia Code", monospace', fontSize: '0.82rem', 
+            flex: 1, background: 'rgba(0,0,0,0.45)', borderRadius: '10px', padding: '0.85rem', 
+            fontFamily: '"Fira Code", "Cascadia Code", monospace', fontSize: '0.76rem', 
             overflowY: 'auto', border: '1px solid rgba(255,255,255,0.04)', minHeight: 0
           }}>
             {logs.length === 0 && (
-              <div style={{ color: '#334155', textAlign: 'center', marginTop: '5rem', fontSize: '0.85rem' }}>
-                <Terminal size={32} style={{ marginBottom: '0.75rem', opacity: 0.3 }} />
-                <div>Waiting for execution to start...</div>
+              <div style={{ color: '#334155', textAlign: 'center', marginTop: '6rem', fontSize: '0.8rem' }}>
+                <Terminal size={24} style={{ marginBottom: '0.5rem', opacity: 0.25 }} />
+                <div>Waiting for Playwright execution to begin...</div>
               </div>
             )}
-            {logs.map(log => (
-              <div key={log.id} style={{ marginBottom: '0.45rem', display: 'flex', gap: '0.75rem', lineHeight: '1.5' }}>
-                <span style={{ color: '#334155', flexShrink: 0 }}>[{log.time}]</span>
-                <span style={{ color: logColors[log.type] || '#f8fafc', wordBreak: 'break-word' }}>{log.text}</span>
+            {logs.map((log) => (
+              <div key={log.id} style={{ marginBottom: '0.35rem', display: 'flex', gap: '0.55rem', lineHeight: '1.4' }}>
+                <span style={{ color: '#334155', flexShrink: 0, userSelect: 'none' }}>[{log.time}]</span>
+                <span style={{ color: logColors[log.type] || '#f8fafc', wordBreak: 'break-word', whiteSpace: 'pre-wrap' }}>{log.text}</span>
               </div>
             ))}
             <div ref={logEndRef} />
           </div>
 
-          {/* Screenshot Gallery */}
-          <div style={{ 
-            height: '110px', background: 'rgba(255,255,255,0.02)', borderRadius: '11px', 
-            padding: '0.65rem 0.85rem', display: 'flex', gap: '0.65rem', 
-            overflowX: 'auto', flexShrink: 0, border: '1px solid rgba(255,255,255,0.03)',
-            alignItems: 'center'
-          }}>
-            {Object.values(screenshots).flat().length === 0 ? (
-              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#1e293b' }}>
-                <ImageIcon size={22} style={{ marginBottom: '0.35rem' }} />
-                <span style={{ fontSize: '0.72rem' }}>No screenshots yet</span>
-              </div>
-            ) : (
-              Object.values(screenshots).flat().map((src, i) => (
-                <div key={i} style={{ position: 'relative', minWidth: '160px', height: '100%', borderRadius: '8px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.08)', flexShrink: 0 }}>
-                  <img src={API_URLS.RECORDINGS(src)} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="Step screenshot" />
-                  <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'rgba(0,0,0,0.65)', padding: '2px 7px', fontSize: '0.62rem', color: '#fff' }}>
-                    Capture #{i+1}
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
+          {/* Status info */}
+          {contextCode && (
+            <div style={{ 
+              fontSize: '0.7rem', color: '#10b981', 
+              background: 'rgba(16,185,129,0.05)', 
+              padding: '0.45rem 0.75rem', borderRadius: '7px', 
+              display: 'flex', alignItems: 'center', gap: '0.4rem',
+              border: '1px solid rgba(16,185,129,0.08)',
+              flexShrink: 0
+            }}>
+              <Info size={11} /> Spec script testDir path resolved dynamically inside tests/
+            </div>
+          )}
         </div>
       </div>
 
+      {/* ===== SPEC CODE MODAL WINDOW ===== */}
+      <AnimatePresence>
+        {showCodePreview && (
+          <div style={{ 
+            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, 
+            background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)', 
+            display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999
+          }}>
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              style={{ 
+                width: '680px', height: '520px', 
+                background: 'rgba(15, 23, 42, 0.95)', border: '1px solid rgba(255,255,255,0.1)', 
+                borderRadius: '16px', display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: '1.25rem'
+              }}
+            >
+              {/* Modal Header */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.85rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <Code size={16} color="#818cf8" />
+                  <span style={{ color: '#fff', fontSize: '0.95rem', fontWeight: 600 }}>Playwright Spec Source Code</span>
+                </div>
+                <div style={{ display: 'flex', gap: '0.4rem' }}>
+                  <button 
+                    onClick={manualSave}
+                    style={{ 
+                      background: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.2)', 
+                      color: '#10b981', display: 'flex', alignItems: 'center', gap: '0.25rem', 
+                      fontSize: '0.68rem', cursor: 'pointer', padding: '0.3rem 0.6rem', borderRadius: '5px', fontWeight: 600
+                    }}
+                  >
+                    {saved ? <Check size={11} /> : <Save size={11} />}
+                    {saved ? 'Saved' : 'Save'}
+                  </button>
+                  <button 
+                    onClick={copyCode}
+                    style={{ 
+                      background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', 
+                      color: '#e2e8f0', display: 'flex', alignItems: 'center', gap: '0.25rem', 
+                      fontSize: '0.68rem', cursor: 'pointer', padding: '0.3rem 0.6rem', borderRadius: '5px', fontWeight: 600
+                    }}
+                  >
+                    {copied ? <Check size={11} /> : null}
+                    {copied ? 'Copied' : 'Copy'}
+                  </button>
+                  <button 
+                    onClick={() => setShowCodePreview(false)}
+                    style={{ 
+                      background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.2)', 
+                      color: '#ef4444', fontSize: '0.68rem', cursor: 'pointer', padding: '0.3rem 0.6rem', 
+                      borderRadius: '5px', fontWeight: 600
+                    }}
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+
+              {/* Code text block */}
+              <div style={{ flex: 1, background: '#090d16', borderRadius: '10px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.03)' }}>
+                <textarea
+                  spellCheck="false"
+                  value={contextCode}
+                  onChange={(e) => setContextCode(e.target.value)}
+                  style={{
+                    width: '100%', height: '100%', background: 'transparent', color: '#94a3b8',
+                    fontFamily: '"Fira Code", monospace', fontSize: '0.78rem', lineHeight: '1.45',
+                    padding: '1rem', border: 'none', resize: 'none', outline: 'none', boxSizing: 'border-box'
+                  }}
+                />
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       <style>{`
-        .dot-blink { animation: blink 1.5s infinite; }
-        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
-        .spin-icon { animation: spin 2s linear infinite; }
+        .spin-icon { animation: spin 1.5s linear infinite; }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         
         * {
           scrollbar-width: thin;
-          scrollbar-color: rgba(99,102,241,0.2) rgba(255,255,255,0.01);
+          scrollbar-color: rgba(99,102,241,0.12) rgba(255,255,255,0.01);
         }
-        ::-webkit-scrollbar { width: 5px; height: 5px; }
+        ::-webkit-scrollbar { width: 4px; height: 4px; }
         ::-webkit-scrollbar-track { background: rgba(255,255,255,0.01); border-radius: 8px; }
-        ::-webkit-scrollbar-thumb { background: rgba(99,102,241,0.2); border-radius: 8px; }
-        ::-webkit-scrollbar-thumb:hover { background: rgba(99,102,241,0.4); }
+        ::-webkit-scrollbar-thumb { background: rgba(99,102,241,0.12); border-radius: 8px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(99,102,241,0.3); }
       `}</style>
     </div>
   );

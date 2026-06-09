@@ -3,7 +3,7 @@ import { generateTestCasesAI, convertToCSV, convertToExcel, generateAutomationSc
 import { syncTestCasesToQMetry } from '../services/qmetryService'
 import { csvToJson, parseHTMLTable } from '../services/csvParser'
 
-const TestCasePage = ({ story, credentials, onBack, onGoToAutomation }) => {
+const TestCasePage = ({ story, credentials, activeProject, onBack, onGoToAutomation }) => {
   const [testCases, setTestCases] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
@@ -102,8 +102,17 @@ const TestCasePage = ({ story, credentials, onBack, onGoToAutomation }) => {
       try {
         const parsed = JSON.parse(cached);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          setTestCases(parsed);
-          return; // Don't re-generate if cached cases exist
+          // Detect if it contains any old dummy/mock test case summaries
+          const isDummy = parsed.some(c => 
+            String(c.Scenario_Name).includes("Verify primary path") || 
+            String(c.Scenario_Name).includes("Verify edge case") ||
+            String(c.Scenario_Name).includes("Standard checkout path")
+          );
+          
+          if (!isDummy) {
+            setTestCases(parsed);
+            return; // Don't re-generate if valid real cases exist
+          }
         }
       } catch {}
     }
@@ -148,8 +157,19 @@ const TestCasePage = ({ story, credentials, onBack, onGoToAutomation }) => {
     try {
       setSyncing(true)
       setSyncResults(null)
-      const results = await syncTestCasesToQMetry(casesToSync, story?.key)
+      const results = await syncTestCasesToQMetry(casesToSync, story?.key, activeProject)
       setSyncResults(results)
+
+      // Map successes back to local test cases to save their qmetryId
+      const updatedCases = casesToSync.map(tc => {
+        const match = results.find(r => r.tcId === tc.TC_ID && r.status === 'Success');
+        if (match && match.qmetryId) {
+          return { ...tc, qmetryId: match.qmetryId };
+        }
+        return tc;
+      });
+      setTestCases(updatedCases);
+      localStorage.setItem(`testpilot_cases_${story?.id}`, JSON.stringify(updatedCases));
     } catch (err) {
       alert(`Sync failed: ${err.message}`)
     } finally {
@@ -176,8 +196,22 @@ const TestCasePage = ({ story, credentials, onBack, onGoToAutomation }) => {
       }
 
       if (parsedCases.length > 0) {
+        // Map the parsed cases from CSV/Excel keys to the front-end format
+        const mappedCases = parsedCases.map(c => ({
+          TC_ID: c['Work Key'] || c.TC_ID || `TC-${Math.floor(Math.random() * 1000)}`,
+          Scenario_Name: c.Summary || c.Scenario_Name || c.name || '',
+          Type: c['TestCase Type'] || c.Type || 'Manual',
+          Gherkin: c['Step Summary'] || c.Gherkin || c.Steps || c.Scenario || '',
+          Expected_Result: c['Expected Result'] || c.Expected_Result || '',
+          qmetryId: c['Work Key'] || c.qmetryId || ''
+        }));
+        
+        // Update the state so the page shows the uploaded test cases
+        setTestCases(mappedCases);
+        localStorage.setItem(`testpilot_cases_${story?.id}`, JSON.stringify(mappedCases));
+
         // Automatically sync the parsed cases
-        await handleSyncToQMetry(parsedCases)
+        await handleSyncToQMetry(mappedCases)
       } else {
         alert("No valid test cases found in the file.")
       }
@@ -216,7 +250,7 @@ const TestCasePage = ({ story, credentials, onBack, onGoToAutomation }) => {
 
         <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
           <button
-            onClick={() => downloadFile(convertToCSV(testCases), `${story.id}_test_cases.csv`, 'text/csv')}
+            onClick={() => downloadFile(convertToCSV(testCases, story?.key || story?.id), `${story.id}_test_cases.csv`, 'text/csv')}
             className="btn-secondary"
             disabled={testCases.length === 0}
             style={{ width: 'auto', padding: '0.6rem 1.2rem', fontSize: '0.85rem', borderRadius: '8px' }}
@@ -224,7 +258,7 @@ const TestCasePage = ({ story, credentials, onBack, onGoToAutomation }) => {
             ↓ CSV
           </button>
           <button
-            onClick={() => downloadFile(convertToExcel(testCases), `${story.id}_test_cases.xls`, 'application/vnd.ms-excel')}
+            onClick={() => downloadFile(convertToExcel(testCases, story?.key || story?.id), `${story.id}_test_cases.xls`, 'application/vnd.ms-excel')}
             className="btn-secondary"
             disabled={testCases.length === 0}
             style={{ width: 'auto', padding: '0.6rem 1.2rem', fontSize: '0.85rem', borderRadius: '8px' }}
@@ -458,16 +492,23 @@ const TestCasePage = ({ story, credentials, onBack, onGoToAutomation }) => {
             {syncResults && (
               <div>
                 <h4 style={{ color: '#f8fafc', marginBottom: '1rem' }}>Sync Results</h4>
-                <div style={{ maxHeight: '250px', overflowY: 'auto', background: 'rgba(0,0,0,0.2)', padding: '1rem', borderRadius: '8px' }}>
+                <div style={{ maxHeight: '250px', overflowY: 'auto', background: 'rgba(0,0,0,0.2)', padding: '1rem', borderRadius: '8px', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                   {syncResults.map((res, idx) => (
-                    <div key={idx} style={{ padding: '0.5rem', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ color: '#cbd5e1', fontSize: '0.85rem' }}>{res.tcId} - {res.name}</span>
-                      <span style={{ 
-                        color: res.status === 'Success' ? '#10b981' : '#ef4444', 
-                        fontSize: '0.8rem', fontWeight: 600, marginLeft: '1rem'
-                      }}>
-                        {res.status} {res.qmetryId ? `(${res.qmetryId})` : ''}
-                      </span>
+                    <div key={idx} style={{ padding: '0.5rem', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ color: '#cbd5e1', fontSize: '0.85rem' }}>{res.tcId} - {res.name}</span>
+                        <span style={{ 
+                          color: res.status === 'Success' ? '#10b981' : '#ef4444', 
+                          fontSize: '0.8rem', fontWeight: 600, marginLeft: '1rem'
+                        }}>
+                          {res.status} {res.qmetryId ? `(${res.qmetryId})` : ''}
+                        </span>
+                      </div>
+                      {res.status !== 'Success' && res.message && (
+                        <div style={{ color: '#ef4444', fontSize: '0.75rem', paddingLeft: '0.5rem', wordBreak: 'break-all' }}>
+                          Error: {res.message}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>

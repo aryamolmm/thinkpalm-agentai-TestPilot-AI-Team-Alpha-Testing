@@ -21,6 +21,7 @@ export const API_URLS = {
   get EXECUTE_TEST() { return `${getExecutionBaseUrl()}/api/execute-test`; },
   get CLEAR_RESULTS() { return `${getExecutionBaseUrl()}/api/execution-results/clear`; },
   get AGENT_EXECUTE() { return `${getExecutionBaseUrl()}/api/agent-execute`; },
+  get STOP_EXECUTION() { return `${getExecutionBaseUrl()}/api/stop-execution`; },
   AGENT_STREAM: (id) => `${getExecutionBaseUrl()}/api/agent-stream/${id}`,
   RECORDINGS: (src) => `${getExecutionBaseUrl()}/recordings/${src}`
 };

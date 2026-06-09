@@ -1,269 +1,402 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { LayoutDashboard, History as HistoryIcon, Beaker, Code2, LogOut, Brain, Zap, Settings, Play, Shield, Terminal, BarChart3 } from 'lucide-react'
+import { 
+  LayoutDashboard, FolderKanban, ListTodo, Zap, Code2, 
+  CheckSquare, Globe, ShieldAlert, Activity, BarChart3, 
+  Settings, LogOut, Brain, Play, Bot 
+} from 'lucide-react'
 
-import Login from './components/Login'
 import Dashboard from './components/Dashboard'
-import TestCasePage from './components/TestCasePage'
+import ProjectsPage from './components/ProjectsPage'
+import StoriesPage from './components/StoriesPage'
+import TestGenPage from './components/TestGenPage'
 import PlaywrightPage from './components/PlaywrightPage'
-import History from './components/History'
-import MemoryPage from './components/MemoryPage'
-import SuperAgent from './components/SuperAgent'
-import SettingsPage from './components/SettingsPage'
-import ExecutionPage from './components/ExecutionPage'
 import ManualExecutionPage from './components/ManualExecutionPage'
+import ExecutionPage from './components/ExecutionPage'
+import ApiTestingPage from './components/ApiTestingPage'
+import SecurityTestingPage from './components/SecurityTestingPage'
+import PerformanceTestingPage from './components/PerformanceTestingPage'
 import ExecutionReport from './components/ExecutionReport'
+import SettingsPage from './components/SettingsPage'
+import TestCasePage from './components/TestCasePage'
 
-const SESSION_KEY = 'testpilot_session'
 const API_KEYS_KEY = 'testpilot_api_keys'
-const INACTIVITY_MS = 5 * 60 * 1000 // 5 minutes
 
 function App() {
-  const [credentials, setCredentials] = useState(null)
   const [activeTab, setActiveTab] = useState('dashboard')
-  const [currentStory, setCurrentStory] = useState(null)
-  const [historyList, setHistoryList] = useState([])
-  const [sessionExpired, setSessionExpired] = useState(false)
-  const inactivityTimer = useRef(null)
+  const [projectsList, setProjectsList] = useState([])
+  const [activeProject, setActiveProject] = useState(null)
+  const [storiesList, setStoriesList] = useState([])
+  const [selectedStory, setSelectedStory] = useState(null)
+  const [storiesConnectionError, setStoriesConnectionError] = useState(null)
+  
+  // API credentials loaded from local storage
+  const [credentials, setCredentials] = useState({
+    engine: 'gemini',
+    geminiKey: '',
+    groqKey: '',
+    openaiKey: '',
+    claudeKey: '',
+    openRouterKey: ''
+  })
 
-  // ── Restore session on page load ──────────────────────────────────
+  // Load projects and credentials on mount
   useEffect(() => {
-    const stored = localStorage.getItem(SESSION_KEY)
-    if (stored) {
+    fetchProjects()
+    
+    const savedKeys = localStorage.getItem(API_KEYS_KEY)
+    if (savedKeys) {
       try {
-        const { creds, tab, story, lastActive } = JSON.parse(stored)
-        const elapsed = Date.now() - lastActive
-        if (elapsed < INACTIVITY_MS) {
-          // Merge saved API keys into credentials
-          const savedKeys = JSON.parse(localStorage.getItem(API_KEYS_KEY) || '{}')
-          setCredentials({ 
-            ...creds, 
-            engine: savedKeys._activeEngine || creds.engine || 'gemini',
-            geminiKey: savedKeys.gemini || '',
-            groqKey: savedKeys.groq || '',
-            openaiKey: savedKeys.openai || '',
-            claudeKey: savedKeys.claude || '',
-            openRouterKey: savedKeys.openrouter || ''
-          })
-          setActiveTab(tab || 'dashboard')
-          if (story) setCurrentStory(story)
-        } else {
-          localStorage.removeItem(SESSION_KEY)
-        }
-      } catch {
-        localStorage.removeItem(SESSION_KEY)
-      }
+        const parsed = JSON.parse(savedKeys)
+        setCredentials(prev => ({
+          ...prev,
+          engine: parsed._activeEngine || 'gemini',
+          geminiKey: parsed.gemini || '',
+          groqKey: parsed.groq || '',
+          openaiKey: parsed.openai || '',
+          claudeKey: parsed.claude || '',
+          openRouterKey: parsed.openrouter || ''
+        }))
+      } catch (e) {}
     }
-
-    const saved = localStorage.getItem('testpilot_history')
-    if (saved) setHistoryList(JSON.parse(saved))
   }, [])
 
-  // ── Persist session whenever credentials / tab / story change ─────
-  useEffect(() => {
-    if (credentials) {
-      localStorage.setItem(SESSION_KEY, JSON.stringify({
-        creds: credentials,
-        tab: activeTab,
-        story: currentStory,
-        lastActive: Date.now()
-      }))
-    }
-  }, [credentials, activeTab, currentStory])
-
-  // ── Inactivity timeout ────────────────────────────────────────────
-  const resetTimer = useCallback(() => {
-    if (!credentials) return
-    clearTimeout(inactivityTimer.current)
-    // Update lastActive in storage
-    const stored = localStorage.getItem(SESSION_KEY)
-    if (stored) {
-      try {
-        const parsed = JSON.parse(stored)
-        localStorage.setItem(SESSION_KEY, JSON.stringify({ ...parsed, lastActive: Date.now() }))
-      } catch {}
-    }
-    inactivityTimer.current = setTimeout(() => {
-      handleLogout(true)
-    }, INACTIVITY_MS)
-  }, [credentials])
-
-  useEffect(() => {
-    const events = ['mousemove', 'keydown', 'click', 'scroll', 'touchstart']
-    events.forEach(e => window.addEventListener(e, resetTimer, { passive: true }))
-    resetTimer()
-    return () => {
-      events.forEach(e => window.removeEventListener(e, resetTimer))
-      clearTimeout(inactivityTimer.current)
-    }
-  }, [resetTimer])
-
-  // ── Auth handlers ─────────────────────────────────────────────────
-  const handleLogin = (creds) => {
-    // Merge saved API keys
-    const savedKeys = JSON.parse(localStorage.getItem(API_KEYS_KEY) || '{}')
-    const mergedCreds = {
-      ...creds,
-      engine: savedKeys._activeEngine || 'gemini',
-      geminiKey: savedKeys.gemini || '',
-      groqKey: savedKeys.groq || '',
-      openaiKey: savedKeys.openai || '',
-      claudeKey: savedKeys.claude || '',
-      openRouterKey: savedKeys.openrouter || ''
-    }
-    setCredentials(mergedCreds)
-    setSessionExpired(false)
-    setActiveTab('dashboard')
-  }
-
-  const handleLogout = (expired = false) => {
-    clearTimeout(inactivityTimer.current)
-    localStorage.removeItem(SESSION_KEY)
-    setCredentials(null)
-    setCurrentStory(null)
-    setActiveTab('dashboard')
-    setSessionExpired(!!expired)
-  }
-
+  // Whenever credentials change, persist active engine
   const handleUpdateCredentials = (updated) => {
     setCredentials(updated)
-    // Also persist active engine to API_KEYS_KEY
     const savedKeys = JSON.parse(localStorage.getItem(API_KEYS_KEY) || '{}')
-    localStorage.setItem(API_KEYS_KEY, JSON.stringify({ ...savedKeys, _activeEngine: updated.engine }))
+    localStorage.setItem(API_KEYS_KEY, JSON.stringify({ 
+      ...savedKeys, 
+      gemini: updated.geminiKey,
+      groq: updated.groqKey,
+      openai: updated.openaiKey,
+      claude: updated.claudeKey,
+      openrouter: updated.openRouterKey,
+      _activeEngine: updated.engine 
+    }))
   }
 
-  // ── Navigation ────────────────────────────────────────────────────
-  const goToQA = (story) => {
-    setCurrentStory(story)
-    setActiveTab('qa')
-    const newEntry = { story, timestamp: new Date().toISOString(), engine: credentials.engine }
-    setHistoryList(prev => {
-      const filtered = prev.filter(p => (p.story.id || p.story.key) !== (story.id || story.key))
-      const updated = [newEntry, ...filtered]
-      localStorage.setItem('testpilot_history', JSON.stringify(updated))
-      return updated
-    })
+  // Fetch all projects from backend
+  const fetchProjects = async () => {
+    try {
+      const resp = await fetch('http://localhost:3001/api/projects')
+      const data = await resp.json()
+      setProjectsList(data)
+      
+      // Auto-activate the first project if none is active, or if the active one was deleted
+      const activeProjExists = data.some(p => p.key === activeProject?.key)
+      if (data.length > 0 && (!activeProject || !activeProjExists)) {
+        handleActivateProject(data[0])
+      } else if (data.length === 0) {
+        setActiveProject(null)
+        setStoriesList([])
+        setSelectedStory(null)
+        setStoriesConnectionError(null)
+      }
+    } catch (e) {
+      console.error('Failed to load projects from backend', e)
+    }
   }
 
-  const goToAutomation = () => setActiveTab('automation')
-  const backToDashboard = () => setActiveTab('dashboard')
-  const backToQA = () => setActiveTab('qa')
-  const viewFromHistory = (story) => { setCurrentStory(story); setActiveTab('qa') }
-
-  // ── Login screen ──────────────────────────────────────────────────
-  if (!credentials) {
-    return (
-      <div className="app-container">
-        {sessionExpired && (
-          <div style={{
-            position: 'fixed', top: '1.5rem', left: '50%', transform: 'translateX(-50%)',
-            background: 'rgba(239, 68, 68, 0.12)', border: '1px solid rgba(239, 68, 68, 0.3)',
-            color: '#fca5a5', padding: '0.75rem 1.5rem', borderRadius: '12px',
-            fontSize: '0.9rem', zIndex: 1000, backdropFilter: 'blur(8px)'
-          }}>
-            ⏱ Session expired due to inactivity. Please log in again.
-          </div>
-        )}
-        <Login onLogin={handleLogin} />
-      </div>
-    )
+  // Activate a selected project and load its stories
+  const handleActivateProject = async (project) => {
+    setActiveProject(project)
+    setSelectedStory(null) // clear story context
+    setStoriesConnectionError(null)
+    
+    // Propagate project's credentials to credentials state
+    setCredentials(prev => ({
+      ...prev,
+      baseUrl: project.jiraUrl,
+      email: project.email,
+      token: project.token
+    }))
+    
+    // Fetch stories for this project key
+    try {
+      const resp = await fetch('http://localhost:3001/api/jira/stories', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          projectKey: project.key,
+          baseUrl: project.jiraUrl,
+          email: project.email,
+          token: project.token
+        })
+      })
+      
+      if (!resp.ok) {
+        const errorData = await resp.json()
+        throw new Error(errorData.message || `HTTP error ${resp.status}`)
+      }
+      
+      const stories = await resp.json()
+      if (Array.isArray(stories)) {
+        setStoriesList(stories)
+        // Select first story by default
+        if (stories.length > 0) {
+          setSelectedStory(stories[0])
+        }
+      } else {
+        throw new Error('Stories data is not in array format')
+      }
+    } catch (err) {
+      console.error('Failed to load project stories', err)
+      setStoriesList([])
+      setStoriesConnectionError(err.message)
+    }
   }
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', width: '100%', maxWidth: '100vw' }}>
+    <div style={{ display: 'flex', minHeight: '100vh', width: '100%', maxWidth: '100vw', background: '#020617', color: '#f8fafc' }}>
+      
       {/* ── SIDEBAR ─────────────────────────────────────────────── */}
       <motion.aside
-        initial={{ x: -250 }}
+        initial={{ x: -260 }}
         animate={{ x: 0 }}
         style={{
-          width: '260px',
-          background: 'rgba(11, 15, 25, 0.95)',
-          borderRight: '1px solid rgba(255,255,255,0.05)',
-          padding: '2rem 1.5rem',
+          width: '275px',
+          background: 'rgba(15, 23, 42, 0.95)',
+          borderRight: '1px solid rgba(255,255,255,0.06)',
+          padding: '1.5rem 1.25rem',
           display: 'flex',
           flexDirection: 'column',
-          backdropFilter: 'blur(10px)',
+          backdropFilter: 'blur(16px)',
           position: 'fixed',
           top: 0, left: 0, bottom: 0,
-          zIndex: 50
+          zIndex: 50,
+          overflowY: 'auto'
         }}
       >
-        <div style={{ paddingBottom: '2rem', borderBottom: '1px solid rgba(255,255,255,0.05)', marginBottom: '1.5rem' }}>
-          <h2 className="title-gradient-primary" style={{ margin: 0, fontSize: '1.6rem' }}>Jira QA Assistant</h2>
-          <p style={{ color: '#64748b', fontSize: '0.75rem', margin: '0.2rem 0 0', textTransform: 'uppercase', letterSpacing: '1px' }}>Jira Story Fetcher & AI Generator</p>
+        {/* Brand Label */}
+        <div style={{ paddingBottom: '1.5rem', borderBottom: '1px solid rgba(255,255,255,0.06)', marginBottom: '1.2rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+            <div style={{ background: 'linear-gradient(135deg, #8b5cf6, #3b82f6)', padding: '0.5rem', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Zap size={20} color="white" />
+            </div>
+            <div>
+              <h2 className="title-gradient-primary" style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800, background: 'linear-gradient(to right, #a78bfa, #60a5fa)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+                TestPilot Autonomous
+              </h2>
+              <span style={{ color: '#64748b', fontSize: '0.68rem', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase' }}>
+                Enterprise QA Agent
+              </span>
+            </div>
+          </div>
         </div>
 
-        <nav style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', flex: 1, overflowY: 'auto', paddingRight: '0.5rem' }}>
-          <SidebarButton active={activeTab === 'dashboard'} icon={<LayoutDashboard size={18} />} label="Dashboard" onClick={() => setActiveTab('dashboard')} />
-          <SidebarButton active={activeTab === 'super'} icon={<Zap size={18} />} label="AI Generator" onClick={() => setActiveTab('super')} />
-          <SidebarButton active={activeTab === 'history'} icon={<HistoryIcon size={18} />} label="History" onClick={() => setActiveTab('history')} />
-          <SidebarButton active={activeTab === 'memory'} icon={<Brain size={18} />} label="AI Memory" onClick={() => setActiveTab('memory')} />
-          <SidebarButton active={activeTab === 'settings'} icon={<Settings size={18} />} label="Settings" onClick={() => setActiveTab('settings')} />
+        {/* Active Project Dropdown */}
+        {projectsList.length > 0 && (
+          <div style={{ 
+            marginBottom: '1.2rem', 
+            padding: '0.75rem 0.9rem', 
+            background: 'rgba(59, 130, 246, 0.08)', 
+            borderRadius: '12px', 
+            border: '1px solid rgba(59, 130, 246, 0.15)',
+            fontSize: '0.78rem' 
+          }}>
+            <span style={{ color: '#94a3b8', fontSize: '0.68rem', display: 'block', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '0.4rem', fontWeight: 600 }}>Active Project</span>
+            <select
+              value={activeProject?.key || ''}
+              onChange={(e) => {
+                const selected = projectsList.find(p => p.key === e.target.value)
+                if (selected) {
+                  handleActivateProject(selected)
+                }
+              }}
+              style={{
+                width: '100%',
+                background: 'rgba(15, 23, 42, 0.8)',
+                border: '1px solid rgba(255, 255, 255, 0.12)',
+                borderRadius: '8px',
+                padding: '0.45rem 0.6rem',
+                color: '#60a5fa',
+                fontSize: '0.82rem',
+                fontWeight: 700,
+                outline: 'none',
+                cursor: 'pointer'
+              }}
+            >
+              {projectsList.map(project => (
+                <option key={project.key} value={project.key} style={{ background: '#0f172a', color: '#cbd5e1' }}>
+                  {project.name} ({project.key})
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
-          <div style={{ margin: '1.5rem 0 0.5rem', fontSize: '0.75rem', color: '#64748b', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 600 }}>Active Session</div>
-          <SidebarButton active={activeTab === 'qa'} disabled={!currentStory} icon={<Beaker size={18} />} label="BDD Testcases" onClick={() => currentStory && setActiveTab('qa')} />
-          <SidebarButton active={activeTab === 'automation'} disabled={!currentStory} icon={<Code2 size={18} />} label="Automation Scripts" onClick={() => currentStory && setActiveTab('automation')} />
+        {/* Nav list */}
+        <nav style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', flex: 1 }}>
+          <div className="nav-section-title">Core Operations</div>
+          <SidebarButton active={activeTab === 'dashboard'} icon={<LayoutDashboard size={17} />} label="Dashboard" onClick={() => setActiveTab('dashboard')} />
+          <SidebarButton active={activeTab === 'projects'} icon={<FolderKanban size={17} />} label="Projects" onClick={() => { setActiveTab('projects'); fetchProjects(); }} />
+          <SidebarButton active={activeTab === 'stories'} icon={<ListTodo size={17} />} label="Stories" onClick={() => setActiveTab('stories')} />
+          <SidebarButton active={activeTab === 'generator'} icon={<Zap size={17} />} label="Test Generation" onClick={() => setActiveTab('generator')} />
 
-          <div style={{ margin: '1.5rem 0 0.5rem', fontSize: '0.75rem', color: '#64748b', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 600 }}>Execution Session</div>
-          <SidebarButton active={activeTab === 'manual_exec'} disabled={!currentStory} icon={<Shield size={18} />} label="Manual Execution" onClick={() => currentStory && setActiveTab('manual_exec')} />
-          <SidebarButton active={activeTab === 'auto_exec'} disabled={!currentStory} icon={<Play size={18} />} label="Execution Console" onClick={() => currentStory && setActiveTab('auto_exec')} />
-          <SidebarButton active={activeTab === 'exec_report'} icon={<BarChart3 size={18} />} label="Execution Report" onClick={() => setActiveTab('exec_report')} />
+          <div className="nav-section-title">Manual & Scripting</div>
+          <SidebarButton active={activeTab === 'manual'} disabled={!selectedStory} icon={<CheckSquare size={17} />} label="Manual Testing" onClick={() => setActiveTab('manual')} />
+          <SidebarButton active={activeTab === 'automation'} disabled={!selectedStory} icon={<Code2 size={17} />} label="Automation Scripts" onClick={() => setActiveTab('automation')} />
+
+          <div className="nav-section-title">Specialist Quality</div>
+          <SidebarButton active={activeTab === 'execution'} disabled={!selectedStory} icon={<Play size={17} />} label="Automation Execution" onClick={() => setActiveTab('execution')} />
+          <SidebarButton active={activeTab === 'api'} disabled={!selectedStory} icon={<Globe size={17} />} label="API Testing" onClick={() => setActiveTab('api')} />
+          <SidebarButton active={activeTab === 'security'} disabled={!selectedStory} icon={<ShieldAlert size={17} />} label="Security Audits" onClick={() => setActiveTab('security')} />
+          <SidebarButton active={activeTab === 'performance'} disabled={!selectedStory} icon={<Activity size={17} />} label="Load Performance" onClick={() => setActiveTab('performance')} />
+
+          <div className="nav-section-title">Executive Control</div>
+          <SidebarButton active={activeTab === 'reports'} icon={<BarChart3 size={17} />} label="Reports Dashboard" onClick={() => setActiveTab('reports')} />
+          <SidebarButton active={activeTab === 'settings'} icon={<Settings size={17} />} label="Settings & Keys" onClick={() => setActiveTab('settings')} />
         </nav>
 
-        {/* Active engine badge */}
-        <div style={{ margin: '1rem 0', padding: '0.6rem 0.8rem', background: 'rgba(99,102,241,0.08)', borderRadius: '10px', border: '1px solid rgba(99,102,241,0.15)', fontSize: '0.75rem', color: '#818cf8' }}>
-          ⚙ Engine: <strong style={{ color: '#a5b4fc', textTransform: 'capitalize' }}>{credentials.engine || 'gemini'}</strong>
-          {!(credentials.engine === 'groq' ? credentials.groqKey : credentials.engine === 'openrouter' ? credentials.openRouterKey : credentials.engine === 'openai' ? credentials.openaiKey : credentials.engine === 'claude' ? credentials.claudeKey : credentials.geminiKey) && <div style={{ color: '#f87171', marginTop: '0.2rem' }}>⚠ No API key — go to Settings</div>}
-        </div>
-
-        <div style={{ paddingTop: '1rem', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-          <button onClick={() => handleLogout(false)} style={{ background: 'transparent', color: '#9ca3af', border: '1px solid rgba(255,255,255,0.1)', padding: '0.7rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', width: '100%', borderRadius: '10px' }}>
-            <LogOut size={16} /> Logout
-          </button>
+        {/* Inference status badge */}
+        <div style={{ 
+          marginTop: '1rem', 
+          padding: '0.65rem 0.85rem', 
+          background: 'rgba(139, 92, 246, 0.08)', 
+          borderRadius: '12px', 
+          border: '1px solid rgba(139, 92, 246, 0.15)', 
+          fontSize: '0.73rem', 
+          color: '#a78bfa' 
+        }}>
+          🤖 Model: <strong style={{ color: '#c084fc', textTransform: 'capitalize' }}>{credentials.engine}</strong>
         </div>
       </motion.aside>
 
       {/* ── MAIN CONTENT ────────────────────────────────────────── */}
-      <main style={{ marginLeft: '260px', flex: 1, padding: '2rem', maxWidth: 'calc(100% - 260px)' }}>
-        <div style={{ maxWidth: '1200px', margin: '0 auto', width: '100%' }}>
+      <main style={{ marginLeft: '275px', flex: 1, padding: '2rem', maxWidth: 'calc(100% - 275px)', overflowY: 'auto' }}>
+        <div style={{ maxWidth: '1280px', margin: '0 auto', width: '100%' }}>
+          
           {activeTab === 'dashboard' && (
-            <Dashboard
-              credentials={credentials}
+            <Dashboard 
+              credentials={credentials} 
               onUpdateCredentials={handleUpdateCredentials}
-              onLogout={handleLogout}
-              onGoToGenerator={goToQA}
+              onLogout={() => setActiveTab('projects')}
+              onGoToGenerator={() => setActiveTab('generator')}
+              activeProject={activeProject}
+              storiesCount={storiesList.length}
             />
           )}
-          {activeTab === 'super' && <SuperAgent credentials={credentials} />}
-          {activeTab === 'history' && <History historyList={historyList} onViewStory={viewFromHistory} />}
-          {activeTab === 'memory' && <MemoryPage />}
+
+          {activeTab === 'projects' && (
+            <ProjectsPage 
+              projectsList={projectsList} 
+              activeProject={activeProject}
+              onActivate={handleActivateProject}
+              onRefresh={fetchProjects}
+            />
+          )}
+
+          {activeTab === 'stories' && (
+            <StoriesPage 
+              storiesList={storiesList}
+              selectedStory={selectedStory}
+              onSelectStory={setSelectedStory}
+              onGenerateClick={() => setActiveTab('generator')}
+              activeProject={activeProject}
+              projectsList={projectsList}
+              onActivateProject={handleActivateProject}
+              connectionError={storiesConnectionError}
+            />
+          )}
+
+          {activeTab === 'generator' && (
+            <TestGenPage 
+              story={selectedStory}
+              storiesList={storiesList}
+              credentials={credentials}
+              activeProject={activeProject}
+              onGoToAutomation={() => setActiveTab('automation')}
+              onViewBddCases={() => setActiveTab('bdd-cases')}
+            />
+          )}
+
+          {activeTab === 'bdd-cases' && selectedStory && (
+            <TestCasePage 
+              story={selectedStory}
+              credentials={credentials}
+              activeProject={activeProject}
+              onBack={() => setActiveTab('generator')}
+              onGoToAutomation={() => setActiveTab('automation')}
+            />
+          )}
+
+          {activeTab === 'automation' && selectedStory && (
+            <PlaywrightPage 
+              story={selectedStory}
+              credentials={credentials}
+              onBack={() => setActiveTab('generator')}
+              onGoToDashboard={() => setActiveTab('dashboard')}
+            />
+          )}
+
+           {activeTab === 'manual' && selectedStory && (
+            <ManualExecutionPage 
+              story={selectedStory}
+              credentials={credentials}
+              activeProject={activeProject}
+            />
+          )}
+
+          {activeTab === 'execution' && selectedStory && (
+            <ExecutionPage 
+              story={selectedStory}
+              credentials={credentials}
+            />
+          )}
+
+          {activeTab === 'api' && selectedStory && (
+            <ApiTestingPage 
+              story={selectedStory}
+              credentials={credentials}
+            />
+          )}
+
+          {activeTab === 'security' && selectedStory && (
+            <SecurityTestingPage 
+              story={selectedStory}
+              credentials={credentials}
+            />
+          )}
+
+          {activeTab === 'performance' && selectedStory && (
+            <PerformanceTestingPage 
+              story={selectedStory}
+              credentials={credentials}
+            />
+          )}
+
+          {activeTab === 'reports' && (
+            <ExecutionReport 
+              story={selectedStory}
+            />
+          )}
+
           {activeTab === 'settings' && (
-            <SettingsPage
+            <SettingsPage 
               credentials={credentials}
               onUpdateCredentials={handleUpdateCredentials}
             />
           )}
-          {activeTab === 'qa' && currentStory && (
-            <TestCasePage
-              story={currentStory}
-              credentials={credentials}
-              onBack={backToDashboard}
-              onGoToAutomation={goToAutomation}
-            />
-          )}
-          {activeTab === 'automation' && currentStory && (
-            <PlaywrightPage
-              story={currentStory}
-              credentials={credentials}
-              onBack={backToQA}
-              onGoToDashboard={backToDashboard}
-            />
-          )}
-          {activeTab === 'manual_exec' && currentStory && <ManualExecutionPage story={currentStory} />}
-          {activeTab === 'auto_exec' && currentStory && <ExecutionPage story={currentStory} credentials={credentials} />}
-          {activeTab === 'exec_report' && <ExecutionReport story={currentStory} />}
+
         </div>
       </main>
+
+      <style>{`
+        .nav-section-title {
+          font-size: 0.65rem;
+          color: #475569;
+          text-transform: uppercase;
+          letter-spacing: 0.8px;
+          font-weight: 700;
+          margin: 0.85rem 0.5rem 0.35rem;
+        }
+        .title-gradient-primary {
+          background: linear-gradient(to right, #c084fc, #6366f1);
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+        }
+      `}</style>
     </div>
   )
 }
@@ -272,23 +405,25 @@ const SidebarButton = ({ active, disabled, icon, label, onClick }) => (
   <button
     onClick={!disabled ? onClick : null}
     style={{
-      display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.85rem 1rem',
-      background: active ? 'rgba(139, 92, 246, 0.15)' : 'transparent',
-      color: active ? '#c084fc' : (disabled ? '#475569' : '#94a3b8'),
+      display: 'flex', alignItems: 'center', gap: '0.65rem', padding: '0.65rem 0.8rem',
+      background: active ? 'rgba(99, 102, 241, 0.12)' : 'transparent',
+      color: active ? '#818cf8' : (disabled ? '#334155' : '#94a3b8'),
       border: '1px solid',
-      borderColor: active ? 'rgba(139, 92, 246, 0.3)' : 'transparent',
-      borderRadius: '12px',
+      borderColor: active ? 'rgba(99, 102, 241, 0.25)' : 'transparent',
+      borderRadius: '10px',
       boxShadow: 'none',
       fontWeight: active ? 600 : 500,
-      opacity: disabled ? 0.6 : 1,
+      opacity: disabled ? 0.5 : 1,
       cursor: disabled ? 'not-allowed' : 'pointer',
       textAlign: 'left',
-      transition: 'all 0.15s ease'
+      width: '100%',
+      fontSize: '0.85rem',
+      transition: 'all 0.12s ease'
     }}
-    onMouseEnter={(e) => { if (!active && !disabled) { e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; e.currentTarget.style.color = 'white' } }}
+    onMouseEnter={(e) => { if (!active && !disabled) { e.currentTarget.style.background = 'rgba(255,255,255,0.03)'; e.currentTarget.style.color = '#f8fafc' } }}
     onMouseLeave={(e) => { if (!active && !disabled) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#94a3b8' } }}
   >
-    {icon} {label}
+    {icon} <span style={{ flex: 1 }}>{label}</span>
   </button>
 )
 

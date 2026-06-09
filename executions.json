@@ -7,5 +7,329 @@
     "execution_time": 0,
     "timestamp": "2026-05-25T06:47:32.854Z",
     "manual": false
+  },
+  {
+    "id": "1780381717155",
+    "test_case_id": "CPDSS-1-TC-01",
+    "status": "Pass",
+    "comments": "AI Agent execution finished with status: Success",
+    "execution_time": 0,
+    "timestamp": "2026-06-02T06:28:37.155Z",
+    "manual": false
+  },
+  {
+    "id": "1780383103455",
+    "test_case_id": "CPDSS-1",
+    "status": "Fail",
+    "output": "Playwright CLI execution finished with exit code 1",
+    "execution_time": 0,
+    "timestamp": "2026-06-02T06:51:43.455Z",
+    "manual": false
+  },
+  {
+    "id": "1780383103469",
+    "test_case_id": "CPDSS-1",
+    "status": "Fail",
+    "comments": "Playwright CLI execution finished with status: Failure",
+    "execution_time": 0,
+    "timestamp": "2026-06-02T06:51:43.469Z",
+    "manual": false
+  },
+  {
+    "id": "1780384296419",
+    "test_case_id": "CPDSS-1-TC-01",
+    "status": "Fail",
+    "output": "Playwright CLI execution finished with exit code 1",
+    "execution_time": 0,
+    "timestamp": "2026-06-02T07:11:36.419Z",
+    "manual": false
+  },
+  {
+    "id": "1780384296431",
+    "test_case_id": "CPDSS-1-TC-01",
+    "status": "Fail",
+    "comments": "Playwright CLI execution finished with status: Failure",
+    "execution_time": 0,
+    "timestamp": "2026-06-02T07:11:36.431Z",
+    "manual": false
+  },
+  {
+    "id": "1780384653332",
+    "test_case_id": "CPDSS-1-TC-01",
+    "status": "Fail",
+    "output": "Playwright CLI execution finished with exit code 1",
+    "execution_time": 0,
+    "timestamp": "2026-06-02T07:17:33.332Z",
+    "manual": false
+  },
+  {
+    "id": "1780384653378",
+    "test_case_id": "CPDSS-1-TC-01",
+    "status": "Fail",
+    "comments": "Playwright CLI execution finished with status: Failure",
+    "execution_time": 0,
+    "timestamp": "2026-06-02T07:17:33.378Z",
+    "manual": false
+  },
+  {
+    "id": "1780387441186",
+    "test_case_id": "CPDSS-1-TC-01",
+    "status": "Fail",
+    "output": "Playwright CLI execution finished with exit code 1",
+    "execution_time": 0,
+    "timestamp": "2026-06-02T08:04:01.186Z",
+    "manual": false
+  },
+  {
+    "id": "1780387441202",
+    "test_case_id": "CPDSS-1-TC-01",
+    "status": "Fail",
+    "comments": "Playwright CLI execution finished with status: Failure",
+    "execution_time": 0,
+    "timestamp": "2026-06-02T08:04:01.202Z",
+    "manual": false
+  },
+  {
+    "id": "1780388895259",
+    "test_case_id": "CPDSS-1-TC-01",
+    "status": "Fail",
+    "output": "Playwright CLI execution finished with exit code 1",
+    "execution_time": 0,
+    "timestamp": "2026-06-02T08:28:15.259Z",
+    "manual": false
+  },
+  {
+    "id": "1780388895282",
+    "test_case_id": "CPDSS-1-TC-01",
+    "status": "Fail",
+    "comments": "Playwright CLI execution finished with status: Failure",
+    "execution_time": 0,
+    "timestamp": "2026-06-02T08:28:15.282Z",
+    "manual": false
+  },
+  {
+    "id": "1780392545459",
+    "test_case_id": "CPDSS-1-TC-01",
+    "status": "Fail",
+    "output": "Playwright CLI execution finished with exit code 1",
+    "execution_time": 0,
+    "timestamp": "2026-06-02T09:29:05.459Z",
+    "manual": false
+  },
+  {
+    "id": "1780392545478",
+    "test_case_id": "CPDSS-1-TC-01",
+    "status": "Fail",
+    "comments": "Playwright CLI execution finished with status: Failure",
+    "execution_time": 0,
+    "timestamp": "2026-06-02T09:29:05.478Z",
+    "manual": false
+  },
+  {
+    "id": "1780393116199",
+    "test_case_id": "CPDSS-1-TC-01",
+    "status": "Fail",
+    "output": "Playwright CLI execution finished with exit code null",
+    "execution_time": 0,
+    "timestamp": "2026-06-02T09:38:36.199Z",
+    "manual": false
+  },
+  {
+    "id": "1780393137648",
+    "test_case_id": "CPDSS-1-TC-01",
+    "status": "Fail",
+    "output": "Playwright CLI execution finished with exit code 1",
+    "execution_time": 0,
+    "timestamp": "2026-06-02T09:38:57.648Z",
+    "manual": false
+  },
+  {
+    "id": "1780393137668",
+    "test_case_id": "CPDSS-1-TC-01",
+    "status": "Fail",
+    "comments": "Playwright CLI execution finished with status: Failure",
+    "execution_time": 0,
+    "timestamp": "2026-06-02T09:38:57.668Z",
+    "manual": false
+  },
+  {
+    "id": "1780393557955",
+    "test_case_id": "CPDSS-1-TC-01",
+    "status": "Fail",
+    "output": "Playwright CLI execution finished with exit code 1",
+    "execution_time": 0,
+    "timestamp": "2026-06-02T09:45:57.955Z",
+    "manual": false
+  },
+  {
+    "id": "1780393557969",
+    "test_case_id": "CPDSS-1-TC-01",
+    "status": "Fail",
+    "comments": "Playwright CLI execution finished with status: Failure",
+    "execution_time": 0,
+    "timestamp": "2026-06-02T09:45:57.969Z",
+    "manual": false
+  },
+  {
+    "id": "1780393629751",
+    "test_case_id": "CPDSS-1-TC-01",
+    "status": "Fail",
+    "output": "Playwright CLI execution finished with exit code 1",
+    "execution_time": 0,
+    "timestamp": "2026-06-02T09:47:09.751Z",
+    "manual": false
+  },
+  {
+    "id": "1780393629767",
+    "test_case_id": "CPDSS-1-TC-01",
+    "status": "Fail",
+    "comments": "Playwright CLI execution finished with status: Failure",
+    "execution_time": 0,
+    "timestamp": "2026-06-02T09:47:09.767Z",
+    "manual": false
+  },
+  {
+    "id": "1780393679477",
+    "test_case_id": "CPDSS-1-TC-01",
+    "status": "Fail",
+    "output": "Playwright CLI execution finished with exit code 1",
+    "execution_time": 0,
+    "timestamp": "2026-06-02T09:47:59.477Z",
+    "manual": false
+  },
+  {
+    "id": "1780393679495",
+    "test_case_id": "CPDSS-1-TC-01",
+    "status": "Fail",
+    "comments": "Playwright CLI execution finished with status: Failure",
+    "execution_time": 0,
+    "timestamp": "2026-06-02T09:47:59.495Z",
+    "manual": false
+  },
+  {
+    "id": "1780397831316",
+    "test_case_id": "CPDSS-1-TC-01",
+    "status": "Fail",
+    "output": "Playwright CLI execution finished with exit code 1",
+    "execution_time": 0,
+    "timestamp": "2026-06-02T10:57:11.316Z",
+    "manual": false
+  },
+  {
+    "id": "1780397831366",
+    "test_case_id": "CPDSS-1-TC-01",
+    "status": "Fail",
+    "comments": "Playwright CLI execution finished with status: Failure",
+    "execution_time": 0,
+    "timestamp": "2026-06-02T10:57:11.366Z",
+    "manual": false
+  },
+  {
+    "id": "1780397894864",
+    "test_case_id": "CPDSS-1-TC-01",
+    "status": "Fail",
+    "comments": "Playwright CLI execution finished with status: Failure",
+    "execution_time": 0,
+    "timestamp": "2026-06-02T10:58:14.864Z",
+    "manual": false
+  },
+  {
+    "id": "1780398046156",
+    "test_case_id": "CPDSS-1-TC-01",
+    "status": "Fail",
+    "output": "Playwright CLI execution finished with exit code 1",
+    "execution_time": 0,
+    "timestamp": "2026-06-02T11:00:46.156Z",
+    "manual": false
+  },
+  {
+    "id": "1780398046171",
+    "test_case_id": "CPDSS-1-TC-01",
+    "status": "Fail",
+    "comments": "Playwright CLI execution finished with status: Failure",
+    "execution_time": 0,
+    "timestamp": "2026-06-02T11:00:46.171Z",
+    "manual": false
+  },
+  {
+    "id": "1780398375921",
+    "test_case_id": "CPDSS-1-TC-01",
+    "status": "Fail",
+    "output": "Playwright CLI execution finished with exit code 1",
+    "execution_time": 0,
+    "timestamp": "2026-06-02T11:06:15.921Z",
+    "manual": false
+  },
+  {
+    "id": "1780398375938",
+    "test_case_id": "CPDSS-1-TC-01",
+    "status": "Fail",
+    "comments": "Playwright CLI execution finished with status: Failure",
+    "execution_time": 0,
+    "timestamp": "2026-06-02T11:06:15.938Z",
+    "manual": false
+  },
+  {
+    "id": "1780398672657",
+    "test_case_id": "CPDSS-1-TC-01",
+    "status": "Fail",
+    "output": "Playwright CLI execution finished with exit code 1",
+    "execution_time": 0,
+    "timestamp": "2026-06-02T11:11:12.657Z",
+    "manual": false
+  },
+  {
+    "id": "1780398672676",
+    "test_case_id": "CPDSS-1-TC-01",
+    "status": "Fail",
+    "comments": "Playwright CLI execution finished with status: Failure",
+    "execution_time": 0,
+    "timestamp": "2026-06-02T11:11:12.676Z",
+    "manual": false
+  },
+  {
+    "id": "1780398695190",
+    "test_case_id": "CPDSS-1-TC-01",
+    "status": "Fail",
+    "output": "Playwright CLI execution finished with exit code 1",
+    "execution_time": 0,
+    "timestamp": "2026-06-02T11:11:35.190Z",
+    "manual": false
+  },
+  {
+    "id": "1780398695205",
+    "test_case_id": "CPDSS-1-TC-01",
+    "status": "Fail",
+    "comments": "Playwright CLI execution finished with status: Failure",
+    "execution_time": 0,
+    "timestamp": "2026-06-02T11:11:35.205Z",
+    "manual": false
+  },
+  {
+    "id": "1780400008367",
+    "test_case_id": "CPDSS-1-TC-01",
+    "status": "Fail",
+    "output": "Playwright CLI execution finished with exit code 1",
+    "execution_time": 0,
+    "timestamp": "2026-06-02T11:33:28.367Z",
+    "manual": false
+  },
+  {
+    "id": "1780400202774",
+    "test_case_id": "CPDSS-1-TC-01",
+    "status": "Pass",
+    "output": "Playwright CLI execution finished with exit code 0",
+    "execution_time": 0,
+    "timestamp": "2026-06-02T11:36:42.774Z",
+    "manual": false
+  },
+  {
+    "id": "1780400202791",
+    "test_case_id": "CPDSS-1-TC-01",
+    "status": "Pass",
+    "comments": "Playwright CLI execution finished with status: Success",
+    "execution_time": 0,
+    "timestamp": "2026-06-02T11:36:42.791Z",
+    "manual": false
   }
 ]

@@ -110,26 +110,98 @@ export const reworkScriptAI = async (story, script, errorLog, apiKey, engine = '
   }
 };
 
-export const convertToCSV = (testCases) => {
+export const convertToCSV = (testCases, storyKey) => {
   if (!testCases || testCases.length === 0) return '';
-  const headers = Object.keys(testCases[0]);
-  const rows = testCases.map(tc => 
-    headers.map(header => `"${(tc[header] || '').toString().replace(/"/g, '""')}"`).join(',')
-  );
+  
+  const headers = [
+    'Work Key', 'Summary', 'Description', 'Precondition', 'Status', 'Priority',
+    'Assignee', 'Reporter', 'Estimated Time', 'Labels', 'Component', 'Sprint',
+    'Fix Version', 'Step Summary', 'Test Data', 'Expected Result', 'Version',
+    'Folder', 'TestCase Type', 'Created By', 'Created On', 'Updated By',
+    'Updated On', 'Story Link', 'Is Shareable', 'Step'
+  ];
+
+  const rows = testCases.map(tc => {
+    const rowObj = {
+      'Work Key': tc.qmetryId || tc.TC_ID || tc['Work Key'] || '',
+      'Summary': tc.Scenario_Name || tc.Summary || tc.name || '',
+      'Description': tc.Description || `Type: ${tc.Type || 'BDD'}`,
+      'Precondition': tc.Precondition || '',
+      'Status': tc.Status || '',
+      'Priority': tc.Priority || '',
+      'Assignee': tc.Assignee || '',
+      'Reporter': tc.Reporter || '',
+      'Estimated Time': tc['Estimated Time'] || '',
+      'Labels': tc.Labels || '',
+      'Component': tc.Component || '',
+      'Sprint': tc.Sprint || '',
+      'Fix Version': tc['Fix Version'] || '',
+      'Step Summary': tc.Gherkin || tc['Step Summary'] || tc.Steps || tc.Scenario || '',
+      'Test Data': tc['Test Data'] || '',
+      'Expected Result': tc.Expected_Result || tc['Expected Result'] || '',
+      'Version': tc.Version || '1',
+      'Folder': tc.Folder || (storyKey ? `/${storyKey}` : '/SauceDemo'),
+      'TestCase Type': tc['TestCase Type'] || 'Manual',
+      'Created By': tc['Created By'] || '',
+      'Created On': tc['Created On'] || '',
+      'Updated By': tc['Updated By'] || '',
+      'Updated On': tc['Updated On'] || '',
+      'Story Link': tc['Story Link'] || 'FALSE',
+      'Is Shareable': tc['Is Shareable'] || '',
+      'Step': tc.Step || ''
+    };
+    return headers.map(header => `"${(rowObj[header] || '').toString().replace(/"/g, '""')}"`).join(',');
+  });
+
   return [headers.join(','), ...rows].join('\n');
 };
 
-export const convertToExcel = (testCases) => {
+export const convertToExcel = (testCases, storyKey) => {
   if (!testCases || testCases.length === 0) return '';
-  const headers = Object.keys(testCases[0]);
+  
+  const headers = [
+    'Work Key', 'Summary', 'Description', 'Precondition', 'Status', 'Priority',
+    'Assignee', 'Reporter', 'Estimated Time', 'Labels', 'Component', 'Sprint',
+    'Fix Version', 'Step Summary', 'Test Data', 'Expected Result', 'Version',
+    'Folder', 'TestCase Type', 'Created By', 'Created On', 'Updated By',
+    'Updated On', 'Story Link', 'Is Shareable', 'Step'
+  ];
   
   let html = '<table><thead><tr>';
   headers.forEach(h => html += `<th style="background-color: #4f46e5; color: white;">${h}</th>`);
   html += '</tr></thead><tbody>';
   
   testCases.forEach(tc => {
+    const rowObj = {
+      'Work Key': tc.qmetryId || tc.TC_ID || tc['Work Key'] || '',
+      'Summary': tc.Scenario_Name || tc.Summary || tc.name || '',
+      'Description': tc.Description || `Type: ${tc.Type || 'BDD'}`,
+      'Precondition': tc.Precondition || '',
+      'Status': tc.Status || '',
+      'Priority': tc.Priority || '',
+      'Assignee': tc.Assignee || '',
+      'Reporter': tc.Reporter || '',
+      'Estimated Time': tc['Estimated Time'] || '',
+      'Labels': tc.Labels || '',
+      'Component': tc.Component || '',
+      'Sprint': tc.Sprint || '',
+      'Fix Version': tc['Fix Version'] || '',
+      'Step Summary': tc.Gherkin || tc['Step Summary'] || tc.Steps || tc.Scenario || '',
+      'Test Data': tc['Test Data'] || '',
+      'Expected Result': tc.Expected_Result || tc['Expected Result'] || '',
+      'Version': tc.Version || '1',
+      'Folder': tc.Folder || (storyKey ? `/${storyKey}` : '/SauceDemo'),
+      'TestCase Type': tc['TestCase Type'] || 'Manual',
+      'Created By': tc['Created By'] || '',
+      'Created On': tc['Created On'] || '',
+      'Updated By': tc['Updated By'] || '',
+      'Updated On': tc['Updated On'] || '',
+      'Story Link': tc['Story Link'] || 'FALSE',
+      'Is Shareable': tc['Is Shareable'] || '',
+      'Step': tc.Step || ''
+    };
     html += '<tr>';
-    headers.forEach(h => html += `<td>${tc[h] || ''}</td>`);
+    headers.forEach(h => html += `<td>${rowObj[h] || ''}</td>`);
     html += '</tr>';
   });
   

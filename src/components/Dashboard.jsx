@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { fetchUserStory } from '../services/jira'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Unplug, Zap, SearchCode, Database, Cpu, CheckCircle, Settings as SettingsIcon } from 'lucide-react'
+import { Zap, SearchCode, Database, Cpu, CheckCircle, Settings as SettingsIcon } from 'lucide-react'
 import { ENGINES } from './SettingsPage'
 
 const API_KEYS_KEY = 'testpilot_api_keys'
@@ -100,11 +100,6 @@ const Dashboard = ({ credentials, onUpdateCredentials, onLogout, onGoToGenerator
             <p style={{ color: '#94a3b8', margin: '0.2rem 0 0', fontSize: '0.85rem' }}>{credentials.baseUrl}</p>
           </div>
         </div>
-        <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
-          onClick={onLogout}
-          style={{ width: 'auto', padding: '0.5rem 1rem', background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', border: '1px solid rgba(239, 68, 68, 0.2)', display: 'flex', alignItems: 'center', gap: '0.5rem', borderRadius: '10px' }}>
-          <Unplug size={16} /> Disconnect
-        </motion.button>
       </header>
 
       <div className="glass-card" style={{ maxWidth: '650px', margin: '0 auto', borderTop: '4px solid #6366f1' }}>

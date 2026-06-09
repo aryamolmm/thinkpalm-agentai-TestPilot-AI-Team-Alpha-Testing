@@ -1,5 +1,7 @@
 import axios from "axios";
 import dotenv from "dotenv";
+import fs from "fs";
+import path from "path";
 
 dotenv.config();
 
@@ -19,12 +21,43 @@ export async function fetchJiraIssue(issueId: string): Promise<JiraIssue> {
     };
   }
 
-  const baseUrl = process.env.JIRA_URL;
-  const email = process.env.JIRA_EMAIL;
-  const token = process.env.JIRA_API_TOKEN;
+  let baseUrl = process.env.JIRA_URL;
+  let email = process.env.JIRA_EMAIL;
+  let token = process.env.JIRA_API_TOKEN;
+
+  // Dynamically resolve credentials from projects.json based on project key prefix (e.g. "CPDSS" from "CPDSS-1")
+  const projectKeyMatch = issueId.match(/^([A-Z0-9]+)-\d+$/i);
+  if (projectKeyMatch) {
+    const projectKey = projectKeyMatch[1].toUpperCase();
+    try {
+      const projectsPath = path.join(process.cwd(), 'projects.json');
+      if (fs.existsSync(projectsPath)) {
+        const projects = JSON.parse(fs.readFileSync(projectsPath, 'utf-8'));
+        const project = projects.find((p: any) => p.key.toUpperCase() === projectKey);
+        if (project) {
+          baseUrl = project.jiraUrl;
+          email = project.email;
+          token = project.token;
+          console.log(`[Jira Reader] Dynamically loaded credentials for project: ${projectKey}`);
+        }
+      }
+    } catch (e: any) {
+      console.warn(`[Jira Reader] Failed to load projects.json dynamically: ${e.message}`);
+    }
+  }
+
+  if (baseUrl) {
+    let urlClean = baseUrl.trim();
+    if (!urlClean.startsWith('http')) urlClean = `https://${urlClean}`;
+    try {
+      baseUrl = new URL(urlClean).origin;
+    } catch (e) {
+      baseUrl = urlClean.replace(/\/+$/, '');
+    }
+  }
 
   if (!email || !token || !baseUrl) {
-    throw new Error("❌ Jira configuration missing in .env (JIRA_URL, JIRA_EMAIL, JIRA_API_TOKEN)");
+    throw new Error("❌ Jira credentials not found in projects.json and missing in .env (JIRA_URL, JIRA_EMAIL, JIRA_API_TOKEN)");
   }
 
   const authHeader = Buffer.from(`${email}:${token}`).toString('base64');

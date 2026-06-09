@@ -283,6 +283,9 @@ const SettingsPage = ({ credentials, onUpdateCredentials }) => {
                 {showKey['qmetry'] ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
             </div>
+            <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.3rem', fontStyle: 'italic' }}>
+              Use the <strong>QMetry Automation API Key</strong> (generated from QMetry &gt; Automation &gt; Automation API), NOT the Open API key.
+            </div>
           </div>
           
           <div>
