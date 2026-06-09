@@ -1,6 +1,6 @@
 # Jira QA Assistant 🚀
 
-**Jira QA Assistant** is a state-of-the-art, multi-agent autonomous testing platform for QA Jira fetching and generation.
+**Jira QA Assistant** is a state-of-the-art, multi-agent autonomous testing platform for QA Jira fetching, testcase management, and script generation.
 
 ### 🛑 The Problem
 Modern QA cycles are often the bottleneck in Rapid Application Development. Manually translating business requirements into BDD scenarios, writing stable automation scripts, and ensuring comprehensive coverage is time-consuming, expensive, and prone to human error.
@@ -10,6 +10,19 @@ Jira QA Assistant streamlines the entire Quality Assurance lifecycle. It transfo
 - **High-quality BDD/Gherkin scenarios**
 - **Production-ready Playwright scripts**
 - **Deep-dive coverage analysis & self-healing rework loops**
+- **Real-time execution status synchronization with QMetry Cloud**
+
+---
+
+## ✨ Key Features & Enhancements
+
+- **🔗 QMetry Cloud Integration**: Synchronize Jira projects, folder hierarchies, and test cases seamlessly. Settings and API credentials are safely managed on a per-project basis.
+- **📊 Interactive Manual Testing**: Execute test cases with a premium dashboard featuring real-time visual progress trackers (donut chart indicators) and direct status synchronizations back to QMetry Test Cycles.
+- **🤖 Specialist Quality Modules**:
+  - **API Testing**: Test and validate endpoints directly.
+  - **Security Audits**: Perform automated security and vulnerability analysis on target user flows.
+  - **Load & Performance Testing**: Simulate concurrent user scenarios and monitor performance bottlenecks.
+- **📈 Centralized Reports Dashboard**: Analyze execution details, pass/fail ratios, logs, and historical run metrics in one unified screen.
 
 ---
 
@@ -60,15 +73,14 @@ Start both the AI Backend and the Vite Frontend:
 # Terminal 1: Start Backend (Port 3001)
 npm run server
 
-# Terminal 2: Start Frontend (Port 5174)
+# Terminal 2: Start Frontend (Port 5173)
 npm run dev
 ```
 
 ---
 
 ## 🎥 Video Demonstration
-[View the 5-Minute Project Walkthrough (Loom)]
-(https://www.loom.com/share/82f393eae3674a0cb835b921ea2b2919)
+[View the 5-Minute Project Walkthrough (Loom)](https://www.loom.com/share/82f393eae3674a0cb835b921ea2b2919)
 
 ---
 
@@ -89,18 +101,19 @@ npm start KAN-101
 ### Frontend
 - **React 18.2.0**: UI library for the agentic studio.
 - **Vite 5.0.0**: Build tool for ultra-fast development.
-- **Framer Motion 10.16.5**: High-performance animations.
-- **Lucide React 1.8.0**: Premium iconography.
+- **Framer Motion 11.0.0**: High-performance animations.
+- **Lucide React 0.370.0**: Premium iconography.
 
 ### Backend & AI
 - **Node.js 20.x**: Core runtime.
-- **Express 4.18.2**: Web framework for AI proxying.
+- **Express 4.19.0**: Web framework for AI proxying.
 - **Google Gemini 1.5 Pro**: Primary semantic reasoning engine.
 - **Groq (Llama 3.3 - 70B)**: High-speed agentic processing.
-- **Axios 1.6.2**: Robust HTTP client for API calls.
+- **Axios 1.7.0**: Robust HTTP client for API calls.
 
-### Testing
-- **Playwright 1.40.0**: Target automation framework.
+### Testing & Management
+- **QMetry Cloud API**: Enterprise test cycle and test case lifecycle tool.
+- **Playwright 1.44.0**: Target automation framework.
 - **TypeScript 5.3.3**: Type safety across the lifecycle.
 
 ---
@@ -126,15 +139,15 @@ As the lead AI architect for this project, here are the key observations from th
 ## 📂 Project Anatomy
 
 ```text
-├── api/                # Express Backend & Orchestration Endpoints
+├── api/                # Express Backend & Orchestration Endpoints (Jira, QMetry proxy, etc.)
 ├── docs/                # Architecture & Project Documentation
 │   ├── architecture.png     # Visual flow of the Multi-Agent system
 │   ├── architecture-overview.md # Technical write-up of the agent logic
 │   └── overview.md          # Project high-level overview
 ├── src/                # Frontend & Core Logic
 │   ├── ai/             # Multi-Agent Logic (Memory, Gherkin, Test, Coverage, Rework)
-│   ├── components/     # Premium React Components (Dashboard, SuperAgent, MemoryPage)
-│   ├── services/       # API Integration Layer
+│   ├── components/     # Premium React Components (Dashboard, Projects, Manual Execution, Specialist Quality)
+│   ├── services/       # API Integration Layer (QMetry, Jira service layers)
 ├── tests/              # Actual Generated Playwright Scripts
 │   └── generated.spec.ts # Production-ready test suite
 └── playwright.config.ts # Automation Configuration
