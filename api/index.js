@@ -2263,7 +2263,27 @@ const sendAgentUpdate = (id, data) => {
 };
 
 const preprocessScript = (script, envConfig = {}) => {
-  let processed = script;
+  if (!script) return '';
+  let processed = script.trim();
+
+  // Strip markdown code block wraps and conversational text prefix
+  const codeBlockRegex = /```(?:typescript|javascript|playwright|ts|js)?\s*([\s\S]*?)```/i;
+  const match = processed.match(codeBlockRegex);
+  if (match) {
+    processed = match[1].trim();
+  } else {
+    const importIndex = processed.indexOf('import ');
+    const testIndex = processed.indexOf('test(');
+    const testDescribeIndex = processed.indexOf('test.describe(');
+    
+    const indices = [importIndex, testIndex, testDescribeIndex].filter(idx => idx !== -1);
+    if (indices.length > 0) {
+      const firstCodeIndex = Math.min(...indices);
+      if (firstCodeIndex > 0) {
+        processed = processed.substring(firstCodeIndex);
+      }
+    }
+  }
 
   // 0. Auto-correct selectors for MOL CP-DSS login page
   processed = processed.replace(/(['"])#username\1/g, "'.username'");
@@ -2891,6 +2911,11 @@ app.get('/api/projects', async (req, res) => {
 
 app.post('/api/projects', async (req, res) => {
   const newProj = req.body;
+  for (const k in newProj) {
+    if (typeof newProj[k] === 'string') {
+      newProj[k] = newProj[k].trim();
+    }
+  }
   if (!newProj.key || !newProj.name || !newProj.jiraUrl) {
     return res.status(400).json({ error: 'Missing key, name, or jiraUrl' });
   }
@@ -2912,7 +2937,7 @@ app.post('/api/projects', async (req, res) => {
 app.delete('/api/projects/:key', async (req, res) => {
   const { key } = req.params;
   const projects = await loadProjectsData();
-  const filtered = projects.filter(p => p.key.toUpperCase() !== key.toUpperCase());
+  const filtered = projects.filter(p => (p.key || '').trim().toUpperCase() !== (key || '').trim().toUpperCase());
   try {
     await writeFile(PROJECTS_FILE, JSON.stringify(filtered, null, 2));
   } catch (err) {}
@@ -2920,7 +2945,8 @@ app.delete('/api/projects/:key', async (req, res) => {
 });
 
 app.post('/api/jira/stories', async (req, res) => {
-  const { projectKey, baseUrl, email, token } = req.body;
+  let { projectKey, baseUrl, email, token } = req.body;
+  if (projectKey) projectKey = projectKey.trim();
   if (!projectKey) return res.status(400).json({ error: 'Missing projectKey' });
 
   if (projectKey.toUpperCase().trim() === 'KAN' || !baseUrl || !email || !token) {

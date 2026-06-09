@@ -331,5 +331,131 @@
     "execution_time": 0,
     "timestamp": "2026-06-02T11:36:42.791Z",
     "manual": false
+  },
+  {
+    "id": "1781002229881",
+    "test_case_id": "TC_001",
+    "status": "Fail",
+    "output": "Playwright CLI execution finished with exit code 1",
+    "execution_time": 0,
+    "timestamp": "2026-06-09T10:50:29.881Z",
+    "manual": false
+  },
+  {
+    "id": "1781002229900",
+    "test_case_id": "TC_001",
+    "status": "Fail",
+    "comments": "Playwright CLI execution finished with status: Failure",
+    "execution_time": 0,
+    "timestamp": "2026-06-09T10:50:29.900Z",
+    "manual": false
+  },
+  {
+    "id": "1781002450126",
+    "test_case_id": "TC_001",
+    "status": "Fail",
+    "output": "Playwright CLI execution finished with exit code 1",
+    "execution_time": 0,
+    "timestamp": "2026-06-09T10:54:10.126Z",
+    "manual": false
+  },
+  {
+    "id": "1781002450161",
+    "test_case_id": "TC_001",
+    "status": "Fail",
+    "comments": "Playwright CLI execution finished with status: Failure",
+    "execution_time": 0,
+    "timestamp": "2026-06-09T10:54:10.161Z",
+    "manual": false
+  },
+  {
+    "id": "1781002544818",
+    "test_case_id": "TC_001",
+    "status": "Fail",
+    "output": "Playwright CLI execution finished with exit code 1",
+    "execution_time": 0,
+    "timestamp": "2026-06-09T10:55:44.818Z",
+    "manual": false
+  },
+  {
+    "id": "1781002544829",
+    "test_case_id": "TC_001",
+    "status": "Fail",
+    "comments": "Playwright CLI execution finished with status: Failure",
+    "execution_time": 0,
+    "timestamp": "2026-06-09T10:55:44.829Z",
+    "manual": false
+  },
+  {
+    "id": "1781003490929",
+    "test_case_id": "TC_001",
+    "status": "Fail",
+    "output": "Playwright CLI execution finished with exit code null",
+    "execution_time": 0,
+    "timestamp": "2026-06-09T11:11:30.929Z",
+    "manual": false
+  },
+  {
+    "id": "1781003512687",
+    "test_case_id": "TC_001",
+    "status": "Fail",
+    "output": "Playwright CLI execution finished with exit code null",
+    "execution_time": 0,
+    "timestamp": "2026-06-09T11:11:52.688Z",
+    "manual": false
+  },
+  {
+    "id": "1781005117786",
+    "test_case_id": "TC_001",
+    "status": "Fail",
+    "output": "Playwright CLI execution finished with exit code 1",
+    "execution_time": 0,
+    "timestamp": "2026-06-09T11:38:37.786Z",
+    "manual": false
+  },
+  {
+    "id": "1781005117824",
+    "test_case_id": "TC_001",
+    "status": "Fail",
+    "comments": "Playwright CLI execution finished with status: Failure",
+    "execution_time": 0,
+    "timestamp": "2026-06-09T11:38:37.824Z",
+    "manual": false
+  },
+  {
+    "id": "1781005152863",
+    "test_case_id": "TC_001",
+    "status": "Fail",
+    "output": "Playwright CLI execution finished with exit code 1",
+    "execution_time": 0,
+    "timestamp": "2026-06-09T11:39:12.863Z",
+    "manual": false
+  },
+  {
+    "id": "1781005152880",
+    "test_case_id": "TC_001",
+    "status": "Fail",
+    "comments": "Playwright CLI execution finished with status: Failure",
+    "execution_time": 0,
+    "timestamp": "2026-06-09T11:39:12.880Z",
+    "manual": false
+  },
+  {
+    "id": "1781005180121",
+    "test_case_id": "TC_001",
+    "status": "Fail",
+    "output": "Playwright CLI execution finished with exit code 1",
+    "execution_time": 0,
+    "timestamp": "2026-06-09T11:39:40.121Z",
+    "manual": false
+  },
+  {
+    "id": "1781005180133",
+    "test_case_id": "TC_001",
+    "status": "Fail",
+    "comments": "Playwright CLI execution finished with status: Failure",
+    "execution_time": 1,
+    "timestamp": "2026-06-09T11:39:40.134Z",
+    "manual": false
   }
 ]
